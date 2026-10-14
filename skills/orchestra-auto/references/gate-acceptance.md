@@ -1,0 +1,117 @@
+# Gate acceptance, merge execution and worker lifecycle
+
+**When to read this**: when a ticket is closing, to pick and run the gate its type calls for; and
+again when merging a project PR or settling a worker's lifecycle.
+
+## 6. Gate acceptance
+
+The coordinator verifies observable results and evidence itself, and on failure lists what is
+missing and sends it back. UI and runtime changes are exercised for real in an isolated
+environment with isolated data per the repository's browser discipline, not accepted on a test's
+say-so. Conclusions and key numbers go into §7's durable report; process logs may live in a
+temporary evidence directory, and the report must not depend on that directory surviving.
+
+### Choosing gates by ticket type
+
+| Ticket type | Gate | Acceptance focus |
+| --- | --- | --- |
+| Design / wayfinder | G-docs / G-wayfinder | Decisions, terminology, frontier, document structure |
+| Research | Source and conclusion verification | Traceable sources, evidence-backed conclusions, stated limits and delivery endpoint |
+| Spec | G-spec | User stories, seams, scope, tracker state |
+| Ticket splitting | G-tickets | Vertical slices, dependencies, each ticket acceptable on its own |
+| Implementation | G-impl | Changed behaviour, tests, quality, deliverables |
+| Automatic merge of project changes | G-merge | PR, CI, combined result, merge safety |
+
+Documentation and planning tickets run only the applicable gates; with no source behaviour change
+there is no obligation to run source tests or a two-axis source review. The full documentation
+gates are in [planning gates](gates-docs-planning.md) — read only the relevant section
+when that kind of ticket closes. Decide the type before dispatch from the expected Target /
+Change and recheck it against the real diff afterwards; on a boundary crossing, handle the scope
+question per §5.
+
+### G-impl — implementation tickets
+
+0. **The scene**: read `git status --porcelain`, the changed-file list and `git diff --numstat`.
+   Uncommitted content must be explained; on an abnormally large diff, protect the real work
+   first and investigate per [formatter recovery](reformat-noise-recovery.md) rather
+   than reverting outright.
+1. **Behaviour and tests**: run the repository's existing tests as the blast radius dictates. A
+   single ticket with a bounded radius runs the affected tests; a shared interface, build
+   configuration, types, or an unclear radius runs the full suite. A fix's test should fail
+   before the fix and pass after it; new behaviour leaves observable red→green evidence. Pure
+   copy, style or configuration changes prove the result with real rendering, a check, or an
+   applicable test. A UI ticket's evidence must land on text, elements, accessible names or real
+   browser behaviour produced by the product.
+2. **Quality**: run the project's applicable typecheck, lint and format gates. If the repository
+   has pre-existing problems, obtain a comparable baseline on **this ticket's** base commit and
+   report the number of newly introduced problems; a log from another branch is not this
+   ticket's baseline.
+3. **Review and coverage**: the Answer gives execution evidence for the pre-skill. When a
+   two-axis code review is required, give the Standards and Spec conclusions separately, with
+   findings and their disposition; the small-ticket exemption in §3 is allowed only when the
+   spec records the reason. When a field, prop or parameter changes source, enumerate every
+   affected call site and state for each whether it changed or stayed, and why. Keep same-class
+   operations within a ticket consistent, and justify any difference with something checkable.
+4. **Task state**: the task's status must match the real degree of completion; the `worker_done`
+   receipt only proves the lifecycle settled and does not replace artifact acceptance. If a
+   message is lost, reconcile the Dispatch with the real artifacts rather than dispatching a
+   second editor.
+5. **Deliverables**: when project files changed, verify the worktree is clean, the commit exists
+   and the branch is pushed; verify the OPEN PR's head matches this ticket's final commit and
+   that its body states Summary, Evidence and Merge Danger accurately; the worker uses the
+   locally available pr skill or the repository template and creates or updates with
+   `--body-file`. If the PR is missing or the body lacks evidence, send it back to the worker to
+   complete; the coordinator does not write it.
+
+### G-merge — automatic merge gate for project PRs
+
+Check the repository's conventions for CI and merging first. Separate known baseline failures
+from real failures this ticket introduced; a locally equivalent gate must still pass. For several
+PRs, an integration worker composes the final heads in an isolated worktree in the merge method
+and DAG order you intend to use, recording the base, each head SHA and every step's tree SHA;
+the coordinator checks the combined result and runs the applicable full gate or equivalent CI on
+the final tree. A single PR gets the same verification on its final head. Fix a PR first on a
+combined conflict or a real red; once any head or the target base changes, re-judge whether the
+earlier evidence still covers what you intend to merge. All gates green means §6.5's automatic
+merge, with no further user confirmation; when the user explicitly asked to keep an open PR, stop
+here.
+
+### §6.5 Merge execution and teardown
+
+1. In DAG or stacked-PR order, check the current head against the accepted SHA and merge each one
+   with the method the repository allows. Merge conflicts go back to that ticket's worker to
+   resolve in its worktree, and the affected gates plus G-merge are re-run.
+2. After each merge run §6.5.1 and check the main branch's tree SHA against the verified prefix.
+   Pause and update the integration evidence only on an unplanned main-branch commit, a different
+   merge result, or a changed head still awaiting merge.
+3. After all merges, confirm the final main branch contains the expected commits, do a quick
+   check and record the SHA. On an anomaly, preserve the scene and dispatch a fix ticket rather
+   than writing a merged state as a passed acceptance.
+4. Close out at the stage matching this round's scope; merging a design PR does not by itself
+   authorize creating implementation tickets.
+
+#### §6.5.1 Syncing local main after each PR merge
+
+Record the PR's MERGED state, its base and the merge SHA. Run `git pull --ff-only` only after
+confirming the main working copy sits on the target main branch, that the working tree and index
+are clean, and that the remote and upstream are explicit. Then verify with
+`git merge-base --is-ancestor <merge_sha> HEAD` and record the local HEAD. When a condition does
+not hold, preserve the scene and report "merged remotely, local sync blocked", pausing later
+merges; do not auto-stash, reset, check out, or create a local merge commit. A network error may
+be retried once after diagnosis.
+
+### Worker lifecycle and send-backs
+
+Handle every settled Dispatch under the current Orca completion accounting: dispatch a follow-up,
+retain it when the user asks, or release it once the artifacts are persisted and release will not
+break an open PR. By default release after the merge and sync complete; when the user asked for
+an open PR only, handle it per current Orca semantics once the remote branch is confirmed safe.
+Query reclaimable before finishing and either settle every item or record why it is blocked.
+
+A send-back states which gate failed, what evidence is missing, and exactly what needs adding.
+For a settled worker, use a new Task for the follow-up and, when reusing the original terminal,
+name the original worktree selector explicitly; a new turn re-runs §4.3.1. When the same gate
+fails twice in a row on one ticket, pause that ticket and bring the user a differential analysis.
+When send-backs reach 5 across tickets, or there is no substantive progress for a long stretch,
+stop dispatching and report the current state; wind down the remaining in-flight work safely
+using the available evidence.
