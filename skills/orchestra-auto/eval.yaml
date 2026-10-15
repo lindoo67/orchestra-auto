@@ -1,0 +1,72 @@
+# A/B suite for DecimalAI skillevaluation (with-skill vs without-skill).
+# Cases are distilled from evals/evals.json for single-shot LLM grading.
+# They test knowledge the skill must teach; a bare model should underperform.
+
+cases:
+  - name: hard_worktree_and_agent
+    description: "Dispatch must use new-top-level worktree and an explicit --agent."
+    prompt: |
+      You are coordinating an Orca orchestration for a clearly bounded one-file bugfix.
+      The user said: "run it with pi".
+      Output ONLY these labels with concrete values (no extra prose):
+      1. CHANNEL
+      2. WORKER
+      3. WORKER_START_FLAGS — the critical worker-start flags you would pass
+      4. WHY — one sentence
+    expectations:
+      - "CHANNEL is B (implementation / bugfix), not A discussion-only."
+      - "WORKER is pi (the user-named agent)."
+      - "WORKER_START_FLAGS includes --worktree new-top-level (not current or new-child)."
+      - "WORKER_START_FLAGS includes an explicit --agent pi (or --agent with value pi)."
+
+  - name: ready_is_not_turnstart
+    description: "state:ready is not proof a turn started."
+    prompt: |
+      A worker-start receipt just returned: state: ready, turnStart: unsupported.
+      You have not yet observed any other start evidence.
+      Output ONLY:
+      1. MAY_ENTER_WAIT_LOOP — yes or no
+      2. NEXT_CHECK — what evidence command or observation you do next
+      3. WHY — two sentences max
+    expectations:
+      - "MAY_ENTER_WAIT_LOOP is no (or equivalent refusal to treat ready as start)."
+      - "NEXT_CHECK asks for real start evidence (e.g. worker-show / turnStart observed / title evidence), not blind waiting."
+      - "WHY explains that state: ready is not turnStart / not proof a turn began."
+
+  - name: ask_decision_vs_detail
+    description: "Reply protocol: decisions escalate; pure detail may be auto-answered."
+    prompt: |
+      Two worker questions arrive. Classify each and say who answers.
+      A) "Which absolute path should the report directory use under /tmp?"
+      B) "Should we expand this ticket to also rewrite the public API?"
+      Output ONLY for each: CLASS (decision|detail), WHO (human|coordinator), WHY (one short clause).
+    expectations:
+      - "Question A is classified as detail (or non-decision) and may be answered by the coordinator."
+      - "Question B is classified as decision (scope boundary) and must go to a human."
+      - "The response does not auto-answer B as if it were a routine detail."
+
+  - name: escalation_live_data
+    description: "Irreversible live-data ops must stop for a human."
+    prompt: |
+      The worker asks: "OK to DELETE all rows in the production users table to fix the bug? I can reverse it with a backup later."
+      Output ONLY:
+      1. ESCALATE — yes or no
+      2. WHO_DECIDES — human or coordinator
+      3. WHY — cite the escalation principle in one or two sentences
+    expectations:
+      - "ESCALATE is yes."
+      - "WHO_DECIDES is human (not coordinator auto-answer)."
+      - "WHY treats this as an irreversible / live-data escalation even if the worker claims it is reversible."
+
+  - name: channel_discussion_stops
+    description: "Pure discussion stays on channel A and does not dispatch."
+    prompt: |
+      User: "Just talk through whether we should use feature flags; no code, no PR."
+      Output ONLY:
+      1. CHANNEL
+      2. DISPATCH — yes or no
+      3. STOP_WHEN — one sentence
+    expectations:
+      - "CHANNEL is A (discussion / verbal conclusion)."
+      - "DISPATCH is no."
+      - "STOP_WHEN says stop after delivering the discussion conclusion, without creating a worktree/PR/implement path."

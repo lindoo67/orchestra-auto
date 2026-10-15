@@ -150,9 +150,10 @@ python3 -m unittest discover -s tests -v
 - `tests/test_package_content.py` checks the package itself: parity between the two language
   variants, frontmatter validity with `name` matching the directory, every relative link resolving,
   every shipped reference being reachable and declaring its trigger, eval JSON shape and uniqueness,
-  `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT licence, and the leak scan.
+  the `eval.yaml` allowlist, `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT
+  licence, and the leak scan.
 
-The recorded result is **57 OK (1 skipped)**. This is the primary structural and behavioral gate.
+The recorded result is **58 OK (1 skipped)**. This is the primary structural and behavioral gate.
 
 Individual check commands, if you want them directly:
 
@@ -197,7 +198,9 @@ properties matter as much as the patterns:
    so, so it is never mistaken for coverage it does not have.
 2. **It is explainable.** Every exception is granted per **(file, pattern)** pair rather than per
    file. Exempting a whole file would also excuse it from the path, credential and token checks —
-   which is how a disclosure scan quietly stops covering the files people edit most. Tests assert
+   which is how a disclosure scan quietly stops covering the files people edit most. The benchmark's
+   API-key placeholder is accepted only on its exact example line; other credential-shaped text
+   still fails. Tests assert
    that the only file which exempts itself is the scanner's own source, that each such entry really
    corresponds to a pattern present there, and that a non-exempt pattern still fails inside an
    exempted file.
@@ -231,47 +234,58 @@ settings. A scenario that asked "which agent does this machine default to?" coul
 without leaking exactly the data this repository is careful to keep out, so the scenarios test the
 *reasoning* (read the live setting, do not guess) rather than a value.
 
-### External skill evaluation
+### Skill A/B benchmark
 
-Results are recorded under `/workspace/orchestra-auto-eval-evidence/`, outside this repository.
+Each skill bundle has an `eval.yaml` suite for DecimalAI's `skillevaluation` reference runner. It
+uses the `llm` adapter to run the same prompts with and without the skill; an LLM judge scores the
+expectations. The five cases, distilled from `evals/evals.json`, cover hard worktree and agent flags,
+`ready` ≠ `turnStart`, decision versus detail replies, live-data escalation, and stopping in the
+discussion channel.
 
-**Ran:**
+Run against an OpenAI-compatible endpoint:
 
-1. **Repository unittest:** `python3 -m unittest discover -s tests -v` — 57 OK, 1 skipped. See
-   [Verification](#verification) for the coverage.
-2. **DecimalAI `skillevaluation` v0.8.0 static scan:** both `SKILL.md` files were clean, with 0
-   findings. The checks include live secrets, remote code execution, reverse shells, data
-   exfiltration, and prompt-injection phrasing. Install and scan with:
+```bash
+export OPENAI_API_KEY=…
+export OPENAI_BASE_URL=…   # OpenAI-compatible base ending in /v1
+pip install 'skillevaluation[runner]'
+skillevaluation validate skills/orchestra-auto
+skillevaluation run --adapter llm --model gpt-6-luna --judge-model gpt-6-luna \
+  --output results-en.json skills/orchestra-auto
+skillevaluation run --adapter llm --model gpt-6-luna --judge-model gpt-6-luna \
+  --output results-zh.json skills/orchestra-auto-zh
+```
 
-   ```bash
-   pip install 'skillevaluation[runner]'
-   skillevaluation scan skills/orchestra-auto
-   skillevaluation scan skills/orchestra-auto-zh
-   ```
+The stock runner hardcodes `api.openai.com`; using a gateway requires support for
+`OPENAI_BASE_URL` (the local runner used for this run had that support). Results are recorded
+outside this repository in `/workspace/orchestra-auto-eval-evidence/ab-benchmark/`.
 
-   See the [skillevaluation guide](https://docs.decimal.ai/guides/skillevaluation).
-3. **Anthropic `quick_validate.py`:** both packages printed `Skill is valid!`, validating frontmatter,
-   names, and descriptions. The script is in
-   [Anthropic's skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator):
+**Results from this run** (5 cases per language; LLM-judged expectations):
 
-   ```bash
-   git clone --depth 1 https://github.com/anthropics/skills /tmp/anthropic-skills
-   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto
-   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto-zh
-   ```
+| Suite | Pass rate, with / without | Lift | Verdict | Avg tokens, with / without |
+| --- | ---: | ---: | --- | ---: |
+| English | 80% / 80% | +0 pts | mixed | 4,711 / 384 (~12×) |
+| Chinese | 80% / 60% | +20 pts | mixed | 4,563 / 452 (~10×) |
 
-**Not run:**
+The Chinese suite improved, while English was flat. The token increase comes from injecting the
+full `SKILL.md` into the with-skill run.
 
-- `skillevaluation validate` / `run` needs an `eval.yaml` beside `SKILL.md`. This repository uses
-  Agent Skills' `evals/evals.json` with 19 scenarios, a different schema; its A/B runner also needs
-  an LLM API key.
-- Anthropic's `run_eval.py` and benchmark mode need Claude Code's `claude -p`, which was unavailable
-  here, for trigger and description evaluations. See Anthropic's
-  [skill-creator evaluation overview](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
-  and the [Agent Skills evaluation guide](https://agentskills.io/skill-creation/evaluating-skills).
-- [skills.sh](https://skills.sh/) is an install-telemetry directory and leaderboard, not an eval
-  harness. Vercel's [`npx skills` CLI](https://github.com/vercel-labs/skills) has no validate or
-  benchmark command.
+| Case | English | Chinese |
+| --- | --- | --- |
+| `hard_worktree_and_agent` | `flip_to_pass` | `flip_to_pass` |
+| `ready_is_not_turnstart` | `flip_to_fail` | `fail_kept` |
+| `ask_decision_vs_detail` | `pass_kept` | `pass_kept` |
+| `escalation_live_data` | `pass_kept` | `pass_kept` |
+| `channel_discussion_stops` | `pass_kept` | `pass_kept` |
+
+For English `ready_is_not_turnstart`, the judge wanted the explicit wording “state: ready ≠
+turnStart”; the behavioral refusal still passed two other expectations. This is a judge-scored
+wording miss, not evidence that the behavior regressed.
+
+**Scope:** Anthropic skill-creator's `run_eval.py` / `aggregate_benchmark` was not run because it
+requires Claude Code's `claude -p`, which was unavailable. NVIDIA SkillEvaluator was not installable
+from PyPI in this environment. SkillsBench's paper suites are fixed task sets, not a plug-in scorer
+for arbitrary custom skills. Repository `unittest`, static `skillevaluation scan`, and Anthropic
+`quick_validate` remain package gates; they do not measure this with/without-skill lift.
 
 ## Repository layout
 
@@ -288,7 +302,8 @@ Results are recorded under `/workspace/orchestra-auto-eval-evidence/`, outside t
 │   │   ├── SKILL.md            routing and the core constraints
 │   │   ├── references/         conditionally-read detail, nine files
 │   │   ├── scripts/            the optional inbox loop
-│   │   └── evals/evals.json    prompt-level scenarios
+│   │   ├── evals/evals.json    prompt-level scenarios
+│   │   └── eval.yaml           five-case A/B benchmark suite
 │   └── orchestra-auto-zh/      Chinese bundle, same structure
 │       └── …
 ├── launch-kit/                 positioning, demo script, FAQs, channel drafts
