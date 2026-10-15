@@ -198,9 +198,7 @@ properties matter as much as the patterns:
    so, so it is never mistaken for coverage it does not have.
 2. **It is explainable.** Every exception is granted per **(file, pattern)** pair rather than per
    file. Exempting a whole file would also excuse it from the path, credential and token checks —
-   which is how a disclosure scan quietly stops covering the files people edit most. The benchmark's
-   API-key placeholder is accepted only on its exact example line; other credential-shaped text
-   still fails. Tests assert
+   which is how a disclosure scan quietly stops covering the files people edit most. Tests assert
    that the only file which exempts itself is the scanner's own source, that each such entry really
    corresponds to a pattern present there, and that a non-exempt pattern still fails inside an
    exempted file.
@@ -234,59 +232,6 @@ settings. A scenario that asked "which agent does this machine default to?" coul
 without leaking exactly the data this repository is careful to keep out, so the scenarios test the
 *reasoning* (read the live setting, do not guess) rather than a value.
 
-### Skill A/B benchmark
-
-Each skill bundle has an `eval.yaml` suite for DecimalAI's `skillevaluation` reference runner. It
-uses the `llm` adapter to run the same prompts with and without the skill; an LLM judge scores the
-expectations. The five cases, distilled from `evals/evals.json`, cover hard worktree and agent flags,
-`ready` ≠ `turnStart`, decision versus detail replies, live-data escalation, and stopping in the
-discussion channel.
-
-Run against an OpenAI-compatible endpoint:
-
-```bash
-export OPENAI_API_KEY=…
-export OPENAI_BASE_URL=…   # OpenAI-compatible base ending in /v1
-pip install 'skillevaluation[runner]'
-skillevaluation validate skills/orchestra-auto
-skillevaluation run --adapter llm --model gpt-6-luna --judge-model gpt-6-luna \
-  --output results-en.json skills/orchestra-auto
-skillevaluation run --adapter llm --model gpt-6-luna --judge-model gpt-6-luna \
-  --output results-zh.json skills/orchestra-auto-zh
-```
-
-The stock runner hardcodes `api.openai.com`; using a gateway requires support for
-`OPENAI_BASE_URL` (the local runner used for this run had that support). Results are recorded
-outside this repository in `/workspace/orchestra-auto-eval-evidence/ab-benchmark/`.
-
-**Results from this run** (5 cases per language; LLM-judged expectations):
-
-| Suite | Pass rate, with / without | Lift | Verdict | Avg tokens, with / without |
-| --- | ---: | ---: | --- | ---: |
-| English | 80% / 80% | +0 pts | mixed | 4,711 / 384 (~12×) |
-| Chinese | 80% / 60% | +20 pts | mixed | 4,563 / 452 (~10×) |
-
-The Chinese suite improved, while English was flat. The token increase comes from injecting the
-full `SKILL.md` into the with-skill run.
-
-| Case | English | Chinese |
-| --- | --- | --- |
-| `hard_worktree_and_agent` | `flip_to_pass` | `flip_to_pass` |
-| `ready_is_not_turnstart` | `flip_to_fail` | `fail_kept` |
-| `ask_decision_vs_detail` | `pass_kept` | `pass_kept` |
-| `escalation_live_data` | `pass_kept` | `pass_kept` |
-| `channel_discussion_stops` | `pass_kept` | `pass_kept` |
-
-For English `ready_is_not_turnstart`, the judge wanted the explicit wording “state: ready ≠
-turnStart”; the behavioral refusal still passed two other expectations. This is a judge-scored
-wording miss, not evidence that the behavior regressed.
-
-**Scope:** Anthropic skill-creator's `run_eval.py` / `aggregate_benchmark` was not run because it
-requires Claude Code's `claude -p`, which was unavailable. NVIDIA SkillEvaluator was not installable
-from PyPI in this environment. SkillsBench's paper suites are fixed task sets, not a plug-in scorer
-for arbitrary custom skills. Repository `unittest`, static `skillevaluation scan`, and Anthropic
-`quick_validate` remain package gates; they do not measure this with/without-skill lift.
-
 ## Repository layout
 
 ```text
@@ -303,7 +248,7 @@ for arbitrary custom skills. Repository `unittest`, static `skillevaluation scan
 │   │   ├── references/         conditionally-read detail, nine files
 │   │   ├── scripts/            the optional inbox loop
 │   │   ├── evals/evals.json    prompt-level scenarios
-│   │   └── eval.yaml           five-case A/B benchmark suite
+│   │   └── eval.yaml           optional cases for external skill runners
 │   └── orchestra-auto-zh/      Chinese bundle, same structure
 │       └── …
 ├── launch-kit/                 positioning, demo script, FAQs, channel drafts

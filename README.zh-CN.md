@@ -174,8 +174,7 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
    `PRIVATE_IDENTIFIERS=<a,b,c> python3 -m unittest tests.test_package_content` 会拿你给的值跑同一套
    扫描。没有这个变量时该用例会 **skip** 并说明原因，因此绝不会被误当成它并不具备的覆盖。
 2. **可解释。** 每条例外都按**（文件，模式）对**授予，不按文件授予。整文件豁免会连带免掉路径、凭证
-   与 token 检查——脱敏扫描正是这样悄悄失去对「最常被编辑的那些文件」的覆盖的。基准命令中的 API key
-   占位符只在完全匹配的示例行中放行；其他凭证形态仍会失败。测试断言：唯一
+   与 token 检查——脱敏扫描正是这样悄悄失去对「最常被编辑的那些文件」的覆盖的。测试断言：唯一
    自我豁免的文件是扫描器自身源码、每条豁免都对应一个确实出现在那里的模式、且被豁免文件里出现
    其他模式仍会失败。
 3. **不误报。** 收件脚本用随机 UUID 作为临时文件名 token。
@@ -204,54 +203,6 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 一旦写进公开评估集就等于泄露本仓库刻意排除的数据；所以场景考的是**推理**（去读实时设置、
 不要猜），而不是某个值。
 
-### Skill A/B 基准
-
-每个 skill 包都有一份供 DecimalAI `skillevaluation` 参考 runner 使用的 `eval.yaml`。它通过
-`llm` adapter 对同一组提示分别运行启用和不启用 skill 的版本，并由 LLM judge 按预期结果打分。
-这 5 个案例从 `evals/evals.json` 提炼而来，覆盖严格的 worktree 与 agent 参数、`ready` ≠
-`turnStart`、决策与细节类回复、实时数据升级，以及在 discussion 通道停止。
-
-通过 OpenAI 兼容端点运行：
-
-```bash
-export OPENAI_API_KEY=…
-export OPENAI_BASE_URL=…   # OpenAI 兼容地址，末尾为 /v1
-pip install 'skillevaluation[runner]'
-skillevaluation validate skills/orchestra-auto
-skillevaluation run --adapter llm --model gpt-6-luna --judge-model gpt-6-luna \
-  --output results-en.json skills/orchestra-auto
-skillevaluation run --adapter llm --model gpt-6-luna --judge-model gpt-6-luna \
-  --output results-zh.json skills/orchestra-auto-zh
-```
-
-原版 runner 将 API 地址写死为 `api.openai.com`；使用网关需要支持 `OPENAI_BASE_URL`（本次运行使用的本地
-runner 已加入该支持）。结果保存在仓库外的 `/workspace/orchestra-auto-eval-evidence/ab-benchmark/`。
-
-**本次结果**（每种语言 5 个案例；预期结果由 LLM judge 评分）：
-
-| 套件 | 通过率，启用 / 未启用 | 提升 | 结论 | 平均 token，启用 / 未启用 |
-| --- | ---: | ---: | --- | ---: |
-| 英文 | 80% / 80% | +0 个百分点 | mixed | 4,711 / 384（约 12×） |
-| 中文 | 80% / 60% | +20 个百分点 | mixed | 4,563 / 452（约 10×） |
-
-中文套件提升，英文持平。token 增长来自启用 skill 时注入完整的 `SKILL.md`。
-
-| 案例 | 英文 | 中文 |
-| --- | --- | --- |
-| `hard_worktree_and_agent` | `flip_to_pass` | `flip_to_pass` |
-| `ready_is_not_turnstart` | `flip_to_fail` | `fail_kept` |
-| `ask_decision_vs_detail` | `pass_kept` | `pass_kept` |
-| `escalation_live_data` | `pass_kept` | `pass_kept` |
-| `channel_discussion_stops` | `pass_kept` | `pass_kept` |
-
-英文的 `ready_is_not_turnstart` 中，judge 要求明确写出“state: ready ≠ turnStart”；但行为上的拒绝仍满足了另外
-两个预期。这是 judge 对措辞的扣分，不代表行为退步。
-
-**范围说明：** Anthropic skill-creator 的 `run_eval.py` / `aggregate_benchmark` 未运行，因为它需要此处没有的
-Claude Code `claude -p`。NVIDIA SkillEvaluator 无法从本环境的 PyPI 安装。SkillsBench 论文中的套件是固定任务集，
-并非可用于任意自定义 skill 的即插即用评分器。仓库 `unittest`、静态 `skillevaluation scan` 和 Anthropic
-`quick_validate` 仍是包级门禁；它们不衡量此处的启用与未启用 skill 提升。
-
 ## 仓库结构
 
 ```text
@@ -268,7 +219,7 @@ Claude Code `claude -p`。NVIDIA SkillEvaluator 无法从本环境的 PyPI 安�
 │   │   ├── references/         按条件读取的细节，9 个文件
 │   │   ├── scripts/            可选的收件循环
 │   │   ├── evals/evals.json    提示词层面的场景
-│   │   └── eval.yaml           5 个案例的 A/B 基准套件
+│   │   └── eval.yaml           可选的外部 skill runner 用例
 │   └── orchestra-auto-zh/      中文包，结构相同
 │       └── …
 ├── launch-kit/                 定位、demo 讲稿、FAQ、各渠道草稿

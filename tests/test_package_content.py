@@ -545,13 +545,6 @@ class LeakScanTests(unittest.TestCase):
     # rather than inferred so that widening it is a deliberate edit.
     SCANNER_SOURCE = "tests/test_package_content.py"
 
-    # The benchmark command shows this public variable with an unmistakable placeholder.
-    # Exempt only the exact line; other credential-shaped text in either README still fails.
-    BENIGN_CREDENTIAL_EXAMPLE_LINES = frozenset({
-        ("README.md", "export OPENAI_API_KEY=…"),
-        ("README.zh-CN.md", "export OPENAI_API_KEY=…"),
-    })
-
     def test_scan_covers_the_published_surface(self):
         scanned = list(tracked_text_files())
         self.assertGreaterEqual(len(scanned), 20, "the scan found suspiciously few files")
@@ -568,22 +561,9 @@ class LeakScanTests(unittest.TestCase):
                     continue
                 for match in pattern.finditer(text):
                     line = text[: match.start()].count("\n") + 1
-                    line_text = text.splitlines()[line - 1]
-                    if (
-                        name == "credential-var"
-                        and (relative, line_text) in self.BENIGN_CREDENTIAL_EXAMPLE_LINES
-                    ):
-                        continue
                     findings.append(f"{relative}:{line} [{reason}]")
         self.assertEqual(findings, [], "forbidden content found:\n" + "\n".join(findings))
 
-    def test_benchmark_api_key_examples_are_placeholder_only(self):
-        for relative, expected_line in self.BENIGN_CREDENTIAL_EXAMPLE_LINES:
-            lines = (REPO_ROOT / relative).read_text().splitlines()
-            self.assertEqual(
-                lines.count(expected_line), 1,
-                f"{relative}: keep the documented API-key example as its exact placeholder line",
-            )
 
     def test_every_allowlisted_file_is_still_scanned_for_other_patterns(self):
         """An exemption for one pattern must not exempt the file from the others."""
