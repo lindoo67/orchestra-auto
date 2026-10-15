@@ -135,6 +135,8 @@ python3 -m unittest discover -s tests -v
   eval JSON 的形状与唯一性、Python 的 `py_compile`、shell wrapper 的 `bash -n`、MIT 许可，
   以及脱敏扫描。
 
+已记录结果为 **57 OK（1 skipped）**。这是主要的结构与行为门禁。
+
 想单独跑某一条也可以：
 
 ```bash
@@ -142,6 +144,24 @@ python3 -m py_compile skills/*/scripts/inbox-loop.py
 bash -n skills/*/scripts/inbox-loop.sh
 python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/evals/*.json')+['skills.sh.json']]"
 ```
+
+### 按需加载与激活成本
+
+按 Agent Skills 约定，宿主会在 skill 激活时注入完整的 `SKILL.md`；只有路由表指示时，才读取
+`references/` 下的文件。[PR #2](https://github.com/whutlichao/orchestra-auto/pull/2) 将派发循环细节移至
+`references/dispatch-loop.md`，将回复细节移至 `references/reply-protocol.md`。始终加载的入口文件保留
+路由表与硬规则，包括 `--worktree new-top-level`、显式 `--agent`、`state:ready` ≠ `turnStart`，以及派发前的
+`worker-start --help` / 注册表确认。
+
+与精简前的提交 `fbb09b9` 相比，入口文件大小如下：
+
+| 变体 | `SKILL.md` 字节数 | 估算 token（字节 ÷ 4）|
+| --- | ---: | ---: |
+| 英文 | 30,208 → 20,287（−32.8%） | 7,552 → 5,071 |
+| 中文 | 24,359 → 15,963（−34.5%） | 6,089 → 3,990 |
+
+这里的 token 节省**口径是字节数 ÷ 4**，不是 tokenizer 实测。细节仍保留在 references 中，因此整个包的字节总量
+几乎不变。如果某一轮同时读取两个新 reference，激活时的节省不等于整轮的节省。
 
 ### 自动脱敏扫描
 
@@ -182,6 +202,43 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 没有本机 agent 偏好、也没有任何主机的设置快照。像「这台机器默认用哪个 agent」这样的场景，
 一旦写进公开评估集就等于泄露本仓库刻意排除的数据；所以场景考的是**推理**（去读实时设置、
 不要猜），而不是某个值。
+
+### 外部 skill 评估
+
+结果记录在 `/workspace/orchestra-auto-eval-evidence/`，该目录位于本仓库之外。
+
+**已运行：**
+
+1. **仓库 unittest：** `python3 -m unittest discover -s tests -v` — 57 OK，1 skipped。覆盖范围见
+   [验证](#验证)。
+2. **DecimalAI `skillevaluation` v0.8.0 静态扫描：** 两份 `SKILL.md` 均 clean，0 项发现。检查项包括实时密钥、
+   远程代码执行、反向 shell、数据外传、提示词注入措辞等。安装与扫描命令：
+
+   ```bash
+   pip install 'skillevaluation[runner]'
+   skillevaluation scan skills/orchestra-auto
+   skillevaluation scan skills/orchestra-auto-zh
+   ```
+
+   详见 [skillevaluation 指南](https://docs.decimal.ai/guides/skillevaluation)。
+3. **Anthropic `quick_validate.py`：** 两个包均输出 `Skill is valid!`，校验 frontmatter、名称与描述。脚本位于
+   [Anthropic 的 skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)：
+
+   ```bash
+   git clone --depth 1 https://github.com/anthropics/skills /tmp/anthropic-skills
+   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto
+   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto-zh
+   ```
+
+**未运行及原因：**
+
+- `skillevaluation validate` / `run` 要求 `SKILL.md` 旁边有 `eval.yaml`。本仓库使用 Agent Skills 的
+  `evals/evals.json`（19 个场景），两者 schema 不同；其 A/B runner 还需要 LLM API key。
+- Anthropic 的 `run_eval.py` 和 benchmark 模式需要 Claude Code 的 `claude -p`，此处不可用；触发与描述评估
+  需要它。参见 Anthropic 的[skill-creator 评估说明](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
+  和 [Agent Skills 评估指南](https://agentskills.io/skill-creation/evaluating-skills)。
+- [skills.sh](https://skills.sh/) 是基于安装遥测的目录与排行榜，不是评估工具。Vercel 的
+  [`npx skills` CLI](https://github.com/vercel-labs/skills) 没有 validate 或 benchmark 命令。
 
 ## 仓库结构
 

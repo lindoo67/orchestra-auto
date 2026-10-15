@@ -152,6 +152,8 @@ python3 -m unittest discover -s tests -v
   every shipped reference being reachable and declaring its trigger, eval JSON shape and uniqueness,
   `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT licence, and the leak scan.
 
+The recorded result is **57 OK (1 skipped)**. This is the primary structural and behavioral gate.
+
 Individual check commands, if you want them directly:
 
 ```bash
@@ -159,6 +161,26 @@ python3 -m py_compile skills/*/scripts/inbox-loop.py
 bash -n skills/*/scripts/inbox-loop.sh
 python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/evals/*.json')+['skills.sh.json']]"
 ```
+
+### On-demand loading and activation cost
+
+Under the Agent Skills convention, a host injects the full `SKILL.md` when the skill activates;
+files under `references/` are read only when the routing table points to them. [PR #2](https://github.com/whutlichao/orchestra-auto/pull/2)
+moved dispatch-loop detail to `references/dispatch-loop.md` and reply detail to
+`references/reply-protocol.md`. The always-loaded entrypoint keeps the routing table and hard rules,
+including `--worktree new-top-level`, explicit `--agent`, `state:ready` ≠ `turnStart`, and
+pre-dispatch `worker-start --help` / registry confirmation.
+
+Compared with pre-thin commit `fbb09b9`, the entrypoint sizes are:
+
+| Variant | `SKILL.md` bytes | Approx. tokens (bytes ÷ 4) |
+| --- | ---: | ---: |
+| English | 30,208 → 20,287 (−32.8%) | 7,552 → 5,071 |
+| Chinese | 24,359 → 15,963 (−34.5%) | 6,089 → 3,990 |
+
+The token figures use **bytes ÷ 4**, not a tokenizer measurement. Total package bytes barely change
+because the detail remains in the references. If a turn loads both new references, activation
+savings are not whole-turn savings.
 
 ### Automated disclosure scan
 
@@ -208,6 +230,48 @@ private repository or ticket name, no local agent preference, and no snapshot of
 settings. A scenario that asked "which agent does this machine default to?" could not be published
 without leaking exactly the data this repository is careful to keep out, so the scenarios test the
 *reasoning* (read the live setting, do not guess) rather than a value.
+
+### External skill evaluation
+
+Results are recorded under `/workspace/orchestra-auto-eval-evidence/`, outside this repository.
+
+**Ran:**
+
+1. **Repository unittest:** `python3 -m unittest discover -s tests -v` — 57 OK, 1 skipped. See
+   [Verification](#verification) for the coverage.
+2. **DecimalAI `skillevaluation` v0.8.0 static scan:** both `SKILL.md` files were clean, with 0
+   findings. The checks include live secrets, remote code execution, reverse shells, data
+   exfiltration, and prompt-injection phrasing. Install and scan with:
+
+   ```bash
+   pip install 'skillevaluation[runner]'
+   skillevaluation scan skills/orchestra-auto
+   skillevaluation scan skills/orchestra-auto-zh
+   ```
+
+   See the [skillevaluation guide](https://docs.decimal.ai/guides/skillevaluation).
+3. **Anthropic `quick_validate.py`:** both packages printed `Skill is valid!`, validating frontmatter,
+   names, and descriptions. The script is in
+   [Anthropic's skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator):
+
+   ```bash
+   git clone --depth 1 https://github.com/anthropics/skills /tmp/anthropic-skills
+   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto
+   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto-zh
+   ```
+
+**Not run:**
+
+- `skillevaluation validate` / `run` needs an `eval.yaml` beside `SKILL.md`. This repository uses
+  Agent Skills' `evals/evals.json` with 19 scenarios, a different schema; its A/B runner also needs
+  an LLM API key.
+- Anthropic's `run_eval.py` and benchmark mode need Claude Code's `claude -p`, which was unavailable
+  here, for trigger and description evaluations. See Anthropic's
+  [skill-creator evaluation overview](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
+  and the [Agent Skills evaluation guide](https://agentskills.io/skill-creation/evaluating-skills).
+- [skills.sh](https://skills.sh/) is an install-telemetry directory and leaderboard, not an eval
+  harness. Vercel's [`npx skills` CLI](https://github.com/vercel-labs/skills) has no validate or
+  benchmark command.
 
 ## Repository layout
 
