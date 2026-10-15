@@ -29,6 +29,7 @@ SKILL_NAMES = ("orchestra-auto", "orchestra-auto-zh")
 SKILL_DIRS = tuple(REPO_ROOT / "skills" / name for name in SKILL_NAMES)
 
 REFERENCE_FILES = (
+    "dispatch-loop.md",
     "dispatch-preflight.md",
     "failed-dispatch-recovery.md",
     "failure-and-reporting.md",
@@ -36,6 +37,7 @@ REFERENCE_FILES = (
     "gates-docs-planning.md",
     "inbox-and-waiting.md",
     "reformat-noise-recovery.md",
+    "reply-protocol.md",
     "spec-contract.md",
     "worker-start-and-recovery.md",
 )
@@ -235,14 +237,14 @@ class ReferenceIntegrityTests(unittest.TestCase):
         """SKILL.md must stay an entrypoint, not become the procedure.
 
         CONTRIBUTING.md says the main skill stays a routing document and detail goes into
-        references, and the Agent Skills guidance recommends staying under 500 lines. An entrypoint
+        references, and the Agent Skills guidance recommends staying under 500 lines; this repo targets 300 to keep activation context lean. An entrypoint
         that grows past that stops being readable as an index, which is what makes the references
         hard to find.
         """
         for name, directory in zip(SKILL_NAMES, SKILL_DIRS, strict=True):
             lines = (directory / "SKILL.md").read_text().splitlines()
             self.assertLess(
-                len(lines), 500,
+                len(lines), 300,
                 f"{name}: SKILL.md is {len(lines)} lines; move detail into references",
             )
 
