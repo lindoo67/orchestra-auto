@@ -1,0 +1,14 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Languages",
+      "description": "The same orchestration procedure, published as separate installable bundles.",
+      "skills": [
+        "orchestra-auto",
+        "orchestra-auto-zh"
+      ]
+    }
+  ]
+}
