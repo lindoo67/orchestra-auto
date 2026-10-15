@@ -150,9 +150,10 @@ python3 -m unittest discover -s tests -v
 - `tests/test_package_content.py` checks the package itself: parity between the two language
   variants, frontmatter validity with `name` matching the directory, every relative link resolving,
   every shipped reference being reachable and declaring its trigger, eval JSON shape and uniqueness,
-  `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT licence, and the leak scan.
+  the `eval.yaml` allowlist, `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT
+  licence, and the leak scan.
 
-The recorded result is **57 OK (1 skipped)**. This is the primary structural and behavioral gate.
+The recorded result is **58 OK (1 skipped)**. This is the primary structural and behavioral gate.
 
 Individual check commands, if you want them directly:
 
@@ -231,48 +232,6 @@ settings. A scenario that asked "which agent does this machine default to?" coul
 without leaking exactly the data this repository is careful to keep out, so the scenarios test the
 *reasoning* (read the live setting, do not guess) rather than a value.
 
-### External skill evaluation
-
-Results are recorded under `/workspace/orchestra-auto-eval-evidence/`, outside this repository.
-
-**Ran:**
-
-1. **Repository unittest:** `python3 -m unittest discover -s tests -v` — 57 OK, 1 skipped. See
-   [Verification](#verification) for the coverage.
-2. **DecimalAI `skillevaluation` v0.8.0 static scan:** both `SKILL.md` files were clean, with 0
-   findings. The checks include live secrets, remote code execution, reverse shells, data
-   exfiltration, and prompt-injection phrasing. Install and scan with:
-
-   ```bash
-   pip install 'skillevaluation[runner]'
-   skillevaluation scan skills/orchestra-auto
-   skillevaluation scan skills/orchestra-auto-zh
-   ```
-
-   See the [skillevaluation guide](https://docs.decimal.ai/guides/skillevaluation).
-3. **Anthropic `quick_validate.py`:** both packages printed `Skill is valid!`, validating frontmatter,
-   names, and descriptions. The script is in
-   [Anthropic's skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator):
-
-   ```bash
-   git clone --depth 1 https://github.com/anthropics/skills /tmp/anthropic-skills
-   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto
-   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto-zh
-   ```
-
-**Not run:**
-
-- `skillevaluation validate` / `run` needs an `eval.yaml` beside `SKILL.md`. This repository uses
-  Agent Skills' `evals/evals.json` with 19 scenarios, a different schema; its A/B runner also needs
-  an LLM API key.
-- Anthropic's `run_eval.py` and benchmark mode need Claude Code's `claude -p`, which was unavailable
-  here, for trigger and description evaluations. See Anthropic's
-  [skill-creator evaluation overview](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
-  and the [Agent Skills evaluation guide](https://agentskills.io/skill-creation/evaluating-skills).
-- [skills.sh](https://skills.sh/) is an install-telemetry directory and leaderboard, not an eval
-  harness. Vercel's [`npx skills` CLI](https://github.com/vercel-labs/skills) has no validate or
-  benchmark command.
-
 ## Repository layout
 
 ```text
@@ -288,7 +247,8 @@ Results are recorded under `/workspace/orchestra-auto-eval-evidence/`, outside t
 │   │   ├── SKILL.md            routing and the core constraints
 │   │   ├── references/         conditionally-read detail, nine files
 │   │   ├── scripts/            the optional inbox loop
-│   │   └── evals/evals.json    prompt-level scenarios
+│   │   ├── evals/evals.json    prompt-level scenarios
+│   │   └── eval.yaml           optional cases for external skill runners
 │   └── orchestra-auto-zh/      Chinese bundle, same structure
 │       └── …
 ├── launch-kit/                 positioning, demo script, FAQs, channel drafts

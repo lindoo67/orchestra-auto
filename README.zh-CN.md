@@ -132,10 +132,10 @@ python3 -m unittest discover -s tests -v
   批次不 ack）、CLI 错误显式失败而不是伪装成空队列、以及单消费者文件锁。
 - `tests/test_package_content.py` 检查包本身：两个语言变体结构一致、frontmatter 合法且 `name`
   与目录一致、所有相对链接可解析、随包发布的每个 reference 都可达并声明了自己的触发条件、
-  eval JSON 的形状与唯一性、Python 的 `py_compile`、shell wrapper 的 `bash -n`、MIT 许可，
-  以及脱敏扫描。
+  eval JSON 的形状与唯一性、`eval.yaml` 白名单、Python 的 `py_compile`、shell wrapper 的
+  `bash -n`、MIT 许可，以及脱敏扫描。
 
-已记录结果为 **57 OK（1 skipped）**。这是主要的结构与行为门禁。
+已记录结果为 **58 OK（1 skipped）**。这是主要的结构与行为门禁。
 
 想单独跑某一条也可以：
 
@@ -203,43 +203,6 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 一旦写进公开评估集就等于泄露本仓库刻意排除的数据；所以场景考的是**推理**（去读实时设置、
 不要猜），而不是某个值。
 
-### 外部 skill 评估
-
-结果记录在 `/workspace/orchestra-auto-eval-evidence/`，该目录位于本仓库之外。
-
-**已运行：**
-
-1. **仓库 unittest：** `python3 -m unittest discover -s tests -v` — 57 OK，1 skipped。覆盖范围见
-   [验证](#验证)。
-2. **DecimalAI `skillevaluation` v0.8.0 静态扫描：** 两份 `SKILL.md` 均 clean，0 项发现。检查项包括实时密钥、
-   远程代码执行、反向 shell、数据外传、提示词注入措辞等。安装与扫描命令：
-
-   ```bash
-   pip install 'skillevaluation[runner]'
-   skillevaluation scan skills/orchestra-auto
-   skillevaluation scan skills/orchestra-auto-zh
-   ```
-
-   详见 [skillevaluation 指南](https://docs.decimal.ai/guides/skillevaluation)。
-3. **Anthropic `quick_validate.py`：** 两个包均输出 `Skill is valid!`，校验 frontmatter、名称与描述。脚本位于
-   [Anthropic 的 skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)：
-
-   ```bash
-   git clone --depth 1 https://github.com/anthropics/skills /tmp/anthropic-skills
-   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto
-   python3 /tmp/anthropic-skills/skills/skill-creator/scripts/quick_validate.py skills/orchestra-auto-zh
-   ```
-
-**未运行及原因：**
-
-- `skillevaluation validate` / `run` 要求 `SKILL.md` 旁边有 `eval.yaml`。本仓库使用 Agent Skills 的
-  `evals/evals.json`（19 个场景），两者 schema 不同；其 A/B runner 还需要 LLM API key。
-- Anthropic 的 `run_eval.py` 和 benchmark 模式需要 Claude Code 的 `claude -p`，此处不可用；触发与描述评估
-  需要它。参见 Anthropic 的[skill-creator 评估说明](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills)
-  和 [Agent Skills 评估指南](https://agentskills.io/skill-creation/evaluating-skills)。
-- [skills.sh](https://skills.sh/) 是基于安装遥测的目录与排行榜，不是评估工具。Vercel 的
-  [`npx skills` CLI](https://github.com/vercel-labs/skills) 没有 validate 或 benchmark 命令。
-
 ## 仓库结构
 
 ```text
@@ -255,7 +218,8 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 │   │   ├── SKILL.md            路由与核心约束
 │   │   ├── references/         按条件读取的细节，9 个文件
 │   │   ├── scripts/            可选的收件循环
-│   │   └── evals/evals.json    提示词层面的场景
+│   │   ├── evals/evals.json    提示词层面的场景
+│   │   └── eval.yaml           可选的外部 skill runner 用例
 │   └── orchestra-auto-zh/      中文包，结构相同
 │       └── …
 ├── launch-kit/                 定位、demo 讲稿、FAQ、各渠道草稿

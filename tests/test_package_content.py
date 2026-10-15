@@ -165,7 +165,7 @@ class StructureTests(unittest.TestCase):
             self.assertEqual(english, chinese, f"{filename} differs between variants")
 
     def test_skill_directories_hold_only_expected_content(self):
-        expected = {"SKILL.md", "references", "scripts", "evals"}
+        expected = {"SKILL.md", "references", "scripts", "evals", "eval.yaml"}
         for directory in SKILL_DIRS:
             present = {p.name for p in directory.iterdir() if p.name != ".DS_Store"}
             self.assertEqual(present, expected, f"unexpected content in {directory}")
@@ -563,6 +563,7 @@ class LeakScanTests(unittest.TestCase):
                     line = text[: match.start()].count("\n") + 1
                     findings.append(f"{relative}:{line} [{reason}]")
         self.assertEqual(findings, [], "forbidden content found:\n" + "\n".join(findings))
+
 
     def test_every_allowlisted_file_is_still_scanned_for_other_patterns(self):
         """An exemption for one pattern must not exempt the file from the others."""
