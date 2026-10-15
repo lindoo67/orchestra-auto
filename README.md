@@ -265,6 +265,14 @@ without leaking exactly the data this repository is careful to keep out, so the 
 - This repository holds the published packages, their checks and their documentation. It does not
   contain Orca itself.
 
+## Acknowledgments
+
+The supervised collaboration and Agent Skills workflow in this repository draws inspiration from
+[Matt Pocock's public agent skills](https://github.com/mattpocock/skills) and related engineering
+practices. This repository implements and adapts those ideas for Orca (`orca orchestration`) as its
+own work; Matt Pocock has not participated in its development or maintenance and does not endorse
+it. See [Matt Pocock's GitHub profile](https://github.com/mattpocock).
+
 ## Licence
 
 [MIT](LICENSE), copyright 2026 whutlichao. Contributions are welcome; see

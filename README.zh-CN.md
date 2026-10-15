@@ -233,6 +233,11 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
   材料不涉及登录账号、不接触社区、不代为发帖。
 - 本仓库只放已发布的包、它们的检查与文档，不含 Orca 本身。
 
+## 致谢
+
+本仓库的监督式协作与 Agent Skills 流程，灵感来自 [Matt Pocock 公开的 agent skills](https://github.com/mattpocock/skills)
+及其相关工程实践思路。本仓库将这些思路落地到 Orca（`orca orchestration`），由本仓库自行实现并适配；Matt Pocock 未参与本项目的开发或维护，也未为本项目背书。可参阅 [Matt Pocock 的 GitHub 个人资料](https://github.com/mattpocock)。
+
 ## 许可
 
 [MIT](LICENSE)，版权 2026 whutlichao。欢迎贡献，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
