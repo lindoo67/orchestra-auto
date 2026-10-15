@@ -4,10 +4,26 @@
 
 ### 实时 worker 设置查找
 
-仅在 Run 即将派活时查询。先用实时 Orca CLI 定位当前 profile（例如 `orca agent hooks status --json`），
-再依据当前 CLI help 与 Orca guide 找到该 profile 的 settings 文档及默认 TUI agent、禁用 TUI agent 字段。
-文件、表和字段名随 Orca 版本变化，不假设旧版布局。记录这两个值；文档或任一值不可读、缺失或为空时停止并报告，
-不得用过期导出、快照、备份、本 skill 文本、eval 夹具或旧日志替代。
+仅在 Run 即将派活时查询。用实时 Orca CLI 定位当前 profile（例如读取 `orca agent hooks status --json` 的
+`result.settingsPath` 并赋给 `SETTINGS_PATH`，其文件所在目录作为 `PROFILE_DIR`）；该路径只用于定位 profile，
+**不要从 `orca-data.json` 读取 agent 设置**。
+
+从该 profile 目录下的 `profile-state.db` 只读查询设置。当前 schema 将设置保存在
+`profile_state_documents` 表中 `domain = 'settings'` 的 `payload` JSON，默认 TUI agent 和禁用列表分别是
+payload 顶层的 `defaultTuiAgent` 与 `disabledTuiAgents`。例如：
+
+```bash
+PROFILE_DIR="$(dirname "$SETTINGS_PATH")"
+sqlite3 -readonly "$PROFILE_DIR/profile-state.db" \
+  "SELECT json_object(
+     'defaultTuiAgent', json_extract(payload, '$.defaultTuiAgent'),
+     'disabledTuiAgents', json_extract(payload, '$.disabledTuiAgents')
+   ) FROM profile_state_documents WHERE domain = 'settings';"
+```
+
+确认结果中 `defaultTuiAgent` 非空，且 `disabledTuiAgents` 是数组（空数组有效）。若数据库、表、字段或值不可读，
+先依据当前 CLI help 与 Orca guide 核对 profile-state schema；仍无法确认时停止并报告，不能回退到
+`orca-data.json`、过期导出、快照、备份、本 skill 文本、eval 夹具或旧日志。
 
 用户点名 agent 时优先使用点名值，否则使用实时默认值；两种情况都核对实时禁用列表，并确认 `worker-start --help` 能识别所选 agent。
 若被禁用、不受支持或设置不可读，停止派活。
