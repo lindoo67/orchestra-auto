@@ -93,6 +93,14 @@ The worktree name is a slug you take at dispatch time; it is not part of the del
 when `--agent` is missing or unrecognized, so the value must be read and passed explicitly. More
 rationale and the full dispatch narrative: [dispatch loop](references/dispatch-loop.md).
 
+**Before dispatch, read live settings:** `--agent` must be recognized by `worker-start --help` and
+absent from the disabled list just read. If settings are unreadable, or neither help nor Orca's
+command registry confirms the agent, report per §9 and stop; do not guess or dispatch an unverified
+harness. §4.3's table gives start/title criteria only, never defaults or disabled state. For an
+unlisted agent, verify help, Orca registry `working` / `permission` / `idle` labels, and the live
+disabled list; dispatch once supported and enabled. Prefer receipt `turnStart: observed`; otherwise
+observe the live title per §4.3.1 and add its verified shape to the table.
+
 ## 1. Channel and delivery endpoint
 
 Record what the user asked for and where they want it to stop. Project changes become an

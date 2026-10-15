@@ -71,4 +71,3 @@ Run/coordinator handle、Task/Dispatch/worker handle/worktree、最后进展、�
   消息文件或 send 成功不算。没有自动唤醒时保持当前 turn 有界轮询；环境必须交还控制权时，
   明确说明尚在运行、不能自动唤醒和恢复入口，不声称会自动继续，不默认要求用户定期催促。
 - worker 缺 worker_done 或已 idle 的恢复、错误与停止条件，按 reference 执行。
-

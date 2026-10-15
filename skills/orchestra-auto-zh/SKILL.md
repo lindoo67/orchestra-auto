@@ -71,6 +71,12 @@ description: >-
 `worker-start` 在本地路径上不查默认设置——`--agent` 缺失或不被识别时抛 `agent_unconfigured`，必须先读出再显式传入。
 更多理由与完整派活叙述见 [派活闭环](references/dispatch-loop.md)。
 
+**派活前读实时设置：** 所选 `--agent` 必须被 `worker-start --help` 识别，且不在刚读到的禁用列表中。
+设置不可读，或 `worker-start --help` 与 Orca 命令注册表都无法确认该 agent 时，按 §9 报告并停止；不要猜，也不要派未经验证的 harness。
+§4.3 的表只记录启动/标题判据，不代表默认值或禁用状态。若该 agent 尚无表项，先核对 help、Orca 注册表的
+`working` / `permission` / `idle` 标签与实时禁用列表；确认受支持且未禁用后照常派活。优先使用回执 `turnStart: observed`；
+否则按 §4.3.1 观察实时标题，并将验证到的形态补入表。
+
 ## 1. 通道与交付终点
 
 记录用户要什么、停在哪里。项目改动默认自动创建并合并 PR。探索可改实现路径，不可擅自扩大工作范围。

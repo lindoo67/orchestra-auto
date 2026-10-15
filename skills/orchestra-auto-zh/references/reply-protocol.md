@@ -55,4 +55,3 @@ worker 的推荐与依据不冲突时照推荐答，冲突时在应答里说明�
 
 应答走同一 orchestration 通道回（`reply`），不引入其他工具回 worker。
 问人用本会话的提问通道——这是 coordinator 侧唯一被允许且被要求的提问动作；worker 侧的禁令不变（§4.4 BEHAVIOR RULE 1）。
-

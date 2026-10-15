@@ -271,6 +271,32 @@ class ReferenceIntegrityTests(unittest.TestCase):
                     f"{name}: the safety invariant {invariant!r} is missing",
                 )
 
+    def test_dispatch_guardrails_stay_in_both_entrypoints(self):
+        """Keep dispatch prerequisites in the always-loaded entrypoints."""
+        expectations = {
+            "orchestra-auto": (
+                "--worktree new-top-level",
+                "--agent",
+                "agent_unconfigured",
+                "`state: ready` is **not** `turnStart`",
+                "`--agent` must be recognized by `worker-start --help`",
+            ),
+            "orchestra-auto-zh": (
+                "--worktree new-top-level",
+                "--agent",
+                "agent_unconfigured",
+                "`state: ready` **不是** `turnStart`",
+                "所选 `--agent` 必须被 `worker-start --help` 识别",
+            ),
+        }
+        for name, required_phrases in expectations.items():
+            entrypoint = (REPO_ROOT / "skills" / name / "SKILL.md").read_text()
+            for phrase in required_phrases:
+                self.assertIn(
+                    phrase, entrypoint,
+                    f"{name}: SKILL.md is missing dispatch guardrail {phrase!r}",
+                )
+
     def test_behavior_rules_carry_all_five_escalation_triggers(self):
         """The spec template's escalation rule must list all five triggers in both languages.
 
