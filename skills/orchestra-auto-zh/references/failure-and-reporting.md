@@ -5,19 +5,8 @@
 ## 9. 失败与上报纪律
 
 - CLI 起不来、orchestration 指南拿不到：报告精确错误并停止，**不换可执行文件、不猜命令**。
-- **`worker-start` 回执 `state: failed` 时，先取证再决定，不直接 relaunch**。实测一次
-  `failedStage: agent_readiness` / `lastError: terminal_handle_stale`：看回执像终端没了，
-  实际取证发现**两个终端都在、worktree 也建好了**，只是 setup 终端 `status: exited` 且
-  `tail: []`（零输出）——就绪检查抢在 setup 前面判了失败。完整 6 步取证与重派姿势见
-  `references/failed-dispatch-recovery.md`（只在收到 `state: failed` 时读）。三步骨架：
-
-  1. **读回执四个字段**（`failedStage` / `lastError` / `recovery` / `residualResources`），
-     再取证终端与 worktree 是否其实都在——判据与命令见该文件。
-  2. **验证 hook 本身**：在 worktree 里手动跑一次 setup 那条命令，跑通即证明是瞬态。
-  3. **按 recovery 重派**：`--retry-of` 配 `--task`，先 release 掉失败 Dispatch，重派后
-     照 §4.3.1 确认 turn 开始。
-
-  **为什么单列**：`terminal_handle_stale` 读起来像「不能重派」，而 recovery 的正向指引就在盘上。**「不许 relaunch」指的是不许无条件重试，不是不许按 recovery 重试。**
+- `worker-start` 回执为 `state: failed` 时，先取证再决定，不盲目重派。照
+  [失败派活恢复](failed-dispatch-recovery.md) 的流程处理。
 - 任何环节触发熔断（单票：连续 2 次过不了同一门禁；run 级：§6 打回协议的累计阈值）或
   escalation 类问题（冻结该票、其余照常，§5.1）→ 立即停下问人，说明卡在哪个阶段、已有的
   证据、需要人决定什么。

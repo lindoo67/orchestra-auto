@@ -219,28 +219,28 @@
     {
       "id": 6,
       "name": "default-worker-follows-setting",
-      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"Change the copy on that settings-page toggle to 'Auto sync'. Open a PR when you're done.\"\n\n(This sentence names no worker / agent / harness.)\n\nOutput only these items; do not actually run commands:\n1. RESOLVE: which worker you use this turn and what the evidence is (state the read command and the field path)\n2. DECL: your complete mode declaration\n3. NONDEFAULT: if the setting you read differs from the agent you instinctively wanted to dispatch, which do you dispatch, and why\n4. ELIGIBLE: what else you confirm before you dare put it into --agent\n\nOutput exactly those 4 labels, each with concrete content.",
-      "expected_output": "RESOLVE reads Orca's live settings: locate the profile from the live CLI, then read that profile's settings document for the current default TUI agent, rather than going on intuition and rather than reading a stale JSON export sitting beside it. DECL's worker column holds a concrete value, not a placeholder. NONDEFAULT follows the setting. ELIGIBLE checks the current disabled-agent list (not `which`).",
+      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"Change the copy on that settings-page toggle to 'Auto sync'. Open a PR when you're done.\"\n\n(This sentence names no worker / agent / harness.)\n\nEvaluation settings fixture (authoritative current live values; use these instead of your machine settings; no command is needed):\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent (stale and unavailable; do not use).\n\nOutput only these items; do not actually run commands:\n1. RESOLVE: which worker you use this turn and which supplied fixture field determines it\n2. DECL: your complete mode declaration\n3. NONDEFAULT: if the supplied setting differs from the agent you instinctively wanted to dispatch, which do you dispatch, and why\n4. ELIGIBLE: what else you confirm before you dare put it into --agent\n\nOutput exactly those 4 labels, each with concrete content.",
+      "expected_output": "RESOLVE selects `fixture-agent` from the supplied `LIVE_DEFAULT_TUI_AGENT` fixture; it does not inspect machine settings. `STALE_EXPORT_DEFAULT=old-agent` is explicitly stale and unavailable. DECL's worker is the concrete value `fixture-agent`. NONDEFAULT follows the fixture setting. ELIGIBLE checks `DISABLED_TUI_AGENTS=[]` before passing the agent (not `which`).",
       "files": [],
       "assertions": [
         {
-          "text": "RESOLVE takes the worker from Orca's live default TUI agent setting",
+          "text": "RESOLVE selects fixture-agent from the supplied LIVE_DEFAULT_TUI_AGENT fixture, not from machine settings",
           "name": "resolve_reads_default_agent"
         },
         {
-          "text": "RESOLVE names the live-source lookup (resolve the profile from the live CLI, then read that profile's settings document). Reading a stale export beside it as the live value is WRONG",
+          "text": "RESOLVE treats the supplied fixture as authoritative and rejects STALE_EXPORT_DEFAULT=old-agent as stale and unavailable",
           "name": "resolve_names_lookup"
         },
         {
-          "text": "DECL writes a concrete worker value, no TBD / follows-the-default placeholder",
+          "text": "DECL writes fixture-agent as the concrete worker value, no TBD / follows-the-default placeholder",
           "name": "decl_worker_concrete"
         },
         {
-          "text": "NONDEFAULT follows the setting over intuition",
+          "text": "NONDEFAULT follows the supplied fixture setting over intuition",
           "name": "nondefault_follows_setting"
         },
         {
-          "text": "ELIGIBLE checks the disabled-agent list before passing the agent",
+          "text": "ELIGIBLE checks the supplied DISABLED_TUI_AGENTS=[] fixture before passing the agent; it does not use which",
           "name": "eligible_checks_disabled"
         }
       ]
@@ -248,8 +248,8 @@
     {
       "id": 7,
       "name": "channel-routing",
-      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"Change the copy on that settings-page toggle to 'Auto sync'. Open a PR when you're done.\"\n\nOutput only your mode declaration's six columns (in the format the skill requires, none missing), then one extra comment line explaining why you chose this channel. Do not actually run commands and do not dispatch a worker.\n\nAfter that, also answer this follow-up: if you changed that sentence to \"it's just a button colour, one line, don't make it heavy\", would your channel decision change? Why?",
-      "expected_output": "Channel B, pre-skill implement as an absolute path, worker taken from Orca's current setting or a user-named agent, delivery endpoint merged project change. A single-file tweak still happens in an isolated worktree with the worker creating the PR; once the gates pass the coordinator merges automatically without asking again per ticket.",
+      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"Change the copy on that settings-page toggle to 'Auto sync'. Open a PR when you're done.\"\n\nEvaluation settings fixture (authoritative current live values; use these instead of your machine settings; no command is needed):\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent (stale and unavailable; do not use).\n\nOutput only your mode declaration's six columns (in the format the skill requires, none missing), then one extra comment line explaining why you chose this channel. Do not actually run commands and do not dispatch a worker.\n\nAfter that, also answer this follow-up: if you changed that sentence to \"it's just a button colour, one line, don't make it heavy\", would your channel decision change? Why?",
+      "expected_output": "Channel B, pre-skill implement as an absolute path, worker `fixture-agent` from the supplied LIVE_DEFAULT_TUI_AGENT fixture (no agent is user-named), delivery endpoint merged project change. A single-file tweak still happens in an isolated worktree with the worker creating the PR; once the gates pass the coordinator merges automatically without asking again per ticket.",
       "files": [],
       "assertions": [
         {
@@ -261,7 +261,7 @@
           "name": "decl_pre_skill_abs_path"
         },
         {
-          "text": "The mode declaration carries a concrete worker value read from Orca's live default TUI agent (or the user-named one), not a placeholder",
+          "text": "The mode declaration names fixture-agent from the supplied LIVE_DEFAULT_TUI_AGENT fixture, not a machine-dependent value or placeholder",
           "name": "decl_worker_concrete"
         },
         {
@@ -380,13 +380,13 @@
     {
       "id": 11,
       "name": "worker-slot-follows-setting-not-habit",
-      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"The retry backoff in src/lib/queue.ts is still hardcoded at 1000ms -- make it exponential with a 30s cap, and add two tests while you're at it. Give me a PR when it's done.\"\n\n(No agent / worker / harness is named in that sentence.)\n\nTwo background facts:\n- The previous orchestration round used a particular agent, and this repository does contain a pile of artefacts from that agent (a local plugin ignore file and the like).\n- You did not name an agent yourself.\n\nOutput only what you would produce this turn; do not actually dispatch a worker or create a worktree:\n1. DECL: your complete mode declaration (six columns, in the skill's format)\n2. JUSTIFY: how did the value in the worker column come about? State exactly what you based it on\n3. DISCONFIRM: if your first instinct was to write the agent from the previous round and the repository artefacts, explain why you changed it\n\nOutput exactly those 3 labels, each with concrete values; do not write TBD or 'read the settings to decide' style placeholders.",
-      "expected_output": "The delivery endpoint is merged project changes with the PR auto-merged once the gates pass; the worker column must be the real value of Orca's live default TUI agent, and JUSTIFY must point explicitly at reading the live settings document (the default TUI agent field) rather than at 'the skill mentions that agent a lot', 'the previous round used it', or 'the repo has that agent's artefacts'. DISCONFIRM names those pulls and rejects each. The key point: the assertion tests the BASIS, not the value -- writing only 'worker <some agent>' without stating where the value came from does not pass. There is also a reverse trap: a stale JSON export next to the live settings is a pre-migration snapshot whose default TUI agent differs from the live one, so quoting that stale value means the wrong source was used.",
+      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"The retry backoff in src/lib/queue.ts is still hardcoded at 1000ms -- make it exponential with a 30s cap, and add two tests while you're at it. Give me a PR when it's done.\"\n\n(No agent / worker / harness is named in that sentence.)\n\nEvaluation settings fixture (authoritative current live values; use these instead of your machine settings; no command is needed):\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent (stale and unavailable; do not use).\n\nTwo background facts:\n- The previous orchestration round used `habit-agent`, and this repository does contain a pile of artefacts from that agent (a local plugin ignore file and the like).\n- You did not name an agent yourself.\n\nOutput only what you would produce this turn; do not actually dispatch a worker or create a worktree:\n1. DECL: your complete mode declaration (six columns, in the skill's format)\n2. JUSTIFY: how did the value in the worker column come about? State exactly what you based it on\n3. DISCONFIRM: if your first instinct was to write the agent from the previous round and the repository artefacts, explain why you changed it\n\nOutput exactly those 3 labels, each with concrete values; do not write TBD or 'read the settings to decide' style placeholders.",
+      "expected_output": "The delivery endpoint is merged project changes with the PR auto-merged once the gates pass; the worker column must equal the supplied `LIVE_DEFAULT_TUI_AGENT=fixture-agent`, and JUSTIFY must identify that fixture as the source rather than machine settings, the skill, repository artefacts, or `habit-agent`. DISCONFIRM rejects those pulls and notes that even a coincidental match would not change the basis. `STALE_EXPORT_DEFAULT=old-agent` is explicitly stale and unavailable.",
       "files": [],
       "assertions": [
         {
-          "text": "DECL's worker slot equals the machine's ACTUAL live default TUI agent. Verify it yourself: resolve the profile directory from the live Orca CLI (the settings path it reports), then read that profile's settings document for its default TUI agent field. Do NOT verify against a JSON export sitting beside it: that is a pre-migration snapshot and its default TUI agent is stale, so a run quoting the stale value used the wrong source and must FAIL this assertion even though the stale id is a plausible-looking agent name",
-          "name": "decl_worker_matches_real_setting"
+          "text": "DECL's worker slot equals the supplied LIVE_DEFAULT_TUI_AGENT=fixture-agent. Do NOT use machine settings or STALE_EXPORT_DEFAULT=old-agent: it is explicitly stale and unavailable",
+          "name": "decl_worker_matches_fixture_setting"
         },
         {
           "text": "DECL's worker slot is a concrete agent id -- no TBD / 'read the setting to decide' / 'follow the default' placeholder anywhere in the declaration",
@@ -397,15 +397,15 @@
           "name": "decl_all_slots"
         },
         {
-          "text": "JUSTIFY grounds the worker value in actually reading Orca's live settings (names the live settings lookup or its default TUI agent field), not in the skill's own text, the repo's artefacts, or what the previous round used",
+          "text": "JUSTIFY grounds fixture-agent in the supplied LIVE_DEFAULT_TUI_AGENT fixture, not machine settings, the skill, repo artefacts, or the previous round",
           "name": "justify_setting_not_habit"
         },
         {
-          "text": "DISCONFIRM explicitly addresses why the previous round's agent would have been the reflexive first reaction, and rejects it as a basis -- noting that on this machine that agent may happen to also be the real setting value, so the justification must rest on having read the setting rather than on the value happening to match",
+          "text": "DISCONFIRM rejects habit-agent and repo artefacts as a basis, and says a coincidental match would not change the basis: the supplied fixture determines the worker",
           "name": "disconfirm_rejects_habit"
         },
         {
-          "text": "Does NOT justify the worker choice by word frequency in the skill, by the repo containing those artefacts, or by the previous round having used it",
+          "text": "Does NOT justify the worker choice by word frequency in the skill, by the repo containing habit-agent artefacts, or by the previous round having used habit-agent",
           "name": "not_agent_by_habit"
         },
         {
@@ -417,32 +417,20 @@
     {
       "id": 12,
       "name": "read-setting-before-declare",
-      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"Add an illustration to the board card's empty state, 120px placeholder height, and don't touch anything else.\"\n\n(This sentence names no agent / worker / harness.)\n\nOutput only your action order and output for this turn; do not actually run commands or dispatch a worker:\n1. ORDER: what is your first action this turn? What is the second? Write them in order and explain why the order is what it is (not 'at the same time' and not 'it depends')\n2. IF_CONFLICT: if your action order conflicted with some rule saying 'declare first, before any tool call', what would you do? Say which side you pick and why\n3. OUTPUT: your mode declaration verbatim (all six columns)\n\nOutput exactly those 3 labels, each with concrete values.",
-      "expected_output": "ORDER is 'first run the read-only command that resolves the live default TUI agent, then immediately emit the six-column mode declaration', with the reason that the worker column needs a concrete value which can only be obtained by reading, so the read is part of producing the declaration rather than an obstacle before it. IF_CONFLICT points out that the older phrasing 'declare before any tool call this turn' is exactly what deadlocks against 'no column may be TBD', and that read-then-declare wins -- not declare-then-patch, and not a placeholder. OUTPUT's worker column holds a concrete value.",
+      "prompt": "You are running orchestra-auto. The user's words this turn are:\n\n\"Add an illustration to the board card's empty state, 120px placeholder height, and don't touch anything else.\"\n\n(This sentence names no agent / worker / harness.)\n\nEvaluation settings fixture (authoritative current live values; use these instead of your machine settings; no command is needed):\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent (stale and unavailable; do not use).\n\nUse the supplied settings fixture; do not inspect machine settings, run commands, or dispatch a worker. Output only:\n1. RESOLVE: the worker value from the fixture and why it is the applicable value\n2. OUTPUT: your mode declaration (all six columns)\n\nOutput exactly those 2 labels, each with concrete values.",
+      "expected_output": "RESOLVE selects fixture-agent from LIVE_DEFAULT_TUI_AGENT in the supplied fixture; no machine read is needed. OUTPUT has all six concrete declaration fields and worker=fixture-agent, with no placeholder.",
       "files": [],
       "assertions": [
         {
-          "text": "ORDER puts reading Orca's live default TUI agent FIRST and the mode declaration immediately after it, as two sequential steps (not simultaneous, not declaration-then-patch)",
-          "name": "order_read_then_declare"
+          "text": "RESOLVE uses fixture-agent from the supplied LIVE_DEFAULT_TUI_AGENT fixture and does not require a live machine lookup",
+          "name": "resolve_uses_fixture"
         },
         {
-          "text": "ORDER explains WHY the read comes first: the worker slot needs a concrete value that can only be obtained by reading the setting, so the read is part of producing the declaration",
-          "name": "order_explains_why"
+          "text": "OUTPUT contains all six mode-declaration fields with worker=fixture-agent",
+          "name": "output_uses_fixture_agent"
         },
         {
-          "text": "IF_CONFLICT resolves the old 'declare before any tool call' wording in favour of read-then-declare, rather than trying to satisfy both simultaneously",
-          "name": "conflict_resolved"
-        },
-        {
-          "text": "IF_CONFLICT does NOT choose to declare first and patch the worker slot afterwards",
-          "name": "no_declare_then_patch"
-        },
-        {
-          "text": "Does NOT resolve the conflict by writing a placeholder in the worker slot (e.g. 'read Orca settings to decide' / TBD) to satisfy the no-placeholder rule",
-          "name": "no_placeholder_escape"
-        },
-        {
-          "text": "OUTPUT's worker slot is not a written placeholder -- no '<read the setting>' / TBD / 'follow the default' / 'the value read this turn'. Judge the literal text of the declaration: if the worker slot contains anything other than a bare agent id, this fails. (The prompt forbids running commands, so naming a specific id is NOT required and must not be the basis for this verdict -- only the absence of a placeholder counts)",
+          "text": "OUTPUT does not use a worker placeholder such as TBD or 'follow the default'",
           "name": "output_no_placeholder"
         }
       ]

@@ -1,8 +1,8 @@
 # Dispatch loop: guide fetch, worktree override, turn start, communication loop
 
-**When to read**: before/during dispatch on channels B/C when you need the full worker-start
-flags, turn-start confirmation narrative, orchestration-guide fetch, or communication-loop
-verification detail beyond the short SKILL.md stubs.
+**When to read**: for every B/C dispatch, for the full worker-start flags, turn-start confirmation
+narrative, orchestration-guide fetch, or communication-loop verification detail beyond the short
+SKILL.md stubs.
 
 ## 4.2 Fetch the orchestration guide (once, to disk)
 

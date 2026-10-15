@@ -1,7 +1,8 @@
 # 通信、唤醒与失联恢复
 
-**什么时候读**：本轮派第一个 worker 之前。命令语义以本轮 `orca skills get orchestration`
-及其 messaging 与 worker-contract 参考为准。本文件使用 `<ORCA>` 表示本轮选定的可执行文件；
+**什么时候读**：每个 Run 首次派活前，处理身份绑定、收件器、唤醒与失联恢复；后续派活只核对收件器仍有效。
+命令语义以本轮 `orca skills get orchestration` 及其 messaging 与 worker-contract 参考为准。
+本文件使用 `<ORCA>` 表示本轮选定的可执行文件；
 脚本通过 `ORCA_CLI_COMMAND` 接收该路径。
 
 ## 1. 身份和收件器

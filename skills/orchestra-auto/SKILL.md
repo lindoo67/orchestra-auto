@@ -47,11 +47,11 @@ constraints. Each reference states its own trigger in its opening lines:
 | File | When to read it |
 | --- | --- |
 | `references/dispatch-preflight.md` | Before every dispatch (tick every line), and at teardown when checking for formatter noise |
-| `references/dispatch-loop.md` | Before/during dispatch for the full worker-start flags, turn-start confirmation, guide fetch, or communication-loop detail |
+| `references/dispatch-loop.md` | Every B/C dispatch for the full worker-start flags, turn-start confirmation, guide fetch, or communication-loop detail |
 | `references/spec-contract.md` | When writing a worker's spec, on any channel and for any ticket type |
 | `references/reply-protocol.md` | When classifying or answering a worker question, or deciding whether to escalate vs auto-answer |
 | `references/gate-acceptance.md` | When a ticket closes and you pick a gate; when merging a project PR or settling a worker |
-| `references/inbox-and-waiting.md` | Before dispatching (identity binding, inbox, wakeups, lost-contact recovery) |
+| `references/inbox-and-waiting.md` | Before each Run's first dispatch (identity binding, inbox, wakeups, lost-contact recovery); later dispatches only verify the inbox is still active |
 | `references/worker-start-and-recovery.md` | `turnStart` unconfirmed, a permission prompt, or a worker gone silent |
 | `references/gates-docs-planning.md` | This ticket is a design / spec / ticket-splitting ticket heading for G-docs / G-wayfinder / G-spec / G-tickets |
 | `references/reformat-noise-recovery.md` | §4.0.1 finds tens of thousands of lines of uncommitted change (formatter reflow noise) |
@@ -63,22 +63,14 @@ constraints. Each reference states its own trigger in its opening lines:
 Enter the flow below only when the current task actually asks for Orca orchestration. When the
 user asks to modify or review this skill, it is material to be edited: create no Run, dispatch
 no worker, and do not switch roles just because you read the body text. Use §1 to decide whether
-this round needs a worker; read the live worker settings only when about to dispatch.
+this round needs a worker.
 
-Read the live Orca settings for this profile and record exactly two fields: the current default
-TUI agent and the current list of disabled TUI agents. **This read is the only source of truth
-for this machine's worker preference.** Locate the profile directory from the live CLI (for
-example `orca agent hooks status --json`), then read the settings document Orca stores for that
-profile. The exact file, table and field names are **Orca-version specific**: resolve them from
-the current CLI help and Orca guides, never hardcode an older version's shape, and never infer
-current values from stale exports, snapshots, backups, agent names in this skill, eval fixtures,
-or old logs. If the read fails, there is no settings row, or the fields are empty, stop and report
-them unreadable.
-
-**How to fill the worker column**: if the user named an agent, use the named one ("run it with
-pi" → `pi`) — being named outranks the default setting. If they named none, read the live
-settings as above. In both cases check the current disabled list: if the chosen agent is disabled,
-stop and report rather than silently substituting a guess.
+Read live Orca settings only when about to dispatch. Record the default TUI agent and the disabled TUI agent list.
+A user-named agent takes priority over the default; otherwise use the recorded
+default. If the selected agent is disabled, or the read fails or returns missing/empty values,
+stop and report. Do not infer settings from stale exports, this skill, or eval fixtures.
+`worker-start` requires an explicit `--agent`. `--agent` must be recognized by `worker-start --help`
+and be absent from the disabled list. Lookup steps: [dispatch preflight](references/dispatch-preflight.md).
 
 ```text
 mode orchestra-auto | channel <A|B|C> | intent <task type> | pre-skill <actual path / none> | worker <actual agent / none> | delivery endpoint <answer / report / merged project change / other endpoint the user named>
@@ -89,17 +81,13 @@ All six columns need **concrete values**; "TBD" is not allowed. When not dispatc
 path (channel B is `implement`, channel C is `grill-with-docs`; §1's table settles it right now).
 The worktree name is a slug you take at dispatch time; it is not part of the delivery endpoint.
 
-`worker-start` does not consult the settings on the local path — it raises `agent_unconfigured`
-when `--agent` is missing or unrecognized, so the value must be read and passed explicitly. More
-rationale and the full dispatch narrative: [dispatch loop](references/dispatch-loop.md).
+`worker-start` does not consult the local default and raises `agent_unconfigured` if `--agent` is
+missing or unrecognized; pass the selected value explicitly. More rationale and the full dispatch
+narrative: [dispatch loop](references/dispatch-loop.md).
 
-**Before dispatch, read live settings:** `--agent` must be recognized by `worker-start --help` and
-absent from the disabled list just read. If settings are unreadable, or neither help nor Orca's
-command registry confirms the agent, report per §9 and stop; do not guess or dispatch an unverified
-harness. §4.3's table gives start/title criteria only, never defaults or disabled state. For an
-unlisted agent, verify help, Orca registry `working` / `permission` / `idle` labels, and the live
-disabled list; dispatch once supported and enabled. Prefer receipt `turnStart: observed`; otherwise
-observe the live title per §4.3.1 and add its verified shape to the table.
+Before dispatch, confirm the selected agent is recognized and enabled; if not, report per §9 and
+stop rather than guessing or substituting. §4.3's table gives start/title criteria only, never
+defaults or disabled state. Prefer receipt `turnStart: observed`; otherwise use §4.3.1 evidence.
 
 ## 1. Channel and delivery endpoint
 
@@ -205,6 +193,7 @@ Every task worker must be started as an isolated top-level worktree with an expl
 
 ### 4.3.1 Confirming the turn started after dispatch
 
+`state: ready` ≠ `turnStart`.
 `state: ready` is **not** `turnStart`; it only means the Dispatch is ready. Prefer the receipt's
 `turnStart: observed`; if it is `unsupported`, `unobserved`, or absent, follow
 [start and recovery](references/worker-start-and-recovery.md) and confirm the start with evidence
