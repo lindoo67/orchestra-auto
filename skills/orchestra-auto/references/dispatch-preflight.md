@@ -6,12 +6,28 @@ worker reports `worker_done` and before you declare a gate passed.
 ### Live worker settings lookup
 
 Only do this lookup when the Run is about to dispatch. Use the live Orca CLI to locate the current
-profile (for example, `orca agent hooks status --json`), then use the current CLI help and Orca
-guide to identify that profile's settings document and the current default TUI-agent and
-disabled-TUI-agent fields. File, table, and field names vary by Orca version; do not assume an
-older layout. Record both values for the dispatch decision. If the document or either value is
-unavailable or empty, stop and report; never substitute a stale export, snapshot, backup, skill
-text, eval fixture, or old log.
+profile (for example, read `result.settingsPath` from `orca agent hooks status --json` and assign it
+to `SETTINGS_PATH`; its parent directory is `PROFILE_DIR`). Use that path only to locate the profile;
+**do not read agent settings from `orca-data.json`**.
+
+Read the settings from `profile-state.db` in that profile directory. In the current schema, settings
+are stored as JSON in the `payload` column of the `profile_state_documents` row where
+`domain = 'settings'`. The top-level `defaultTuiAgent` and `disabledTuiAgents` fields hold the default
+TUI agent and disabled-agent list. For example:
+
+```bash
+PROFILE_DIR="$(dirname "$SETTINGS_PATH")"
+sqlite3 -readonly "$PROFILE_DIR/profile-state.db" \
+  "SELECT json_object(
+     'defaultTuiAgent', json_extract(payload, '$.defaultTuiAgent'),
+     'disabledTuiAgents', json_extract(payload, '$.disabledTuiAgents')
+   ) FROM profile_state_documents WHERE domain = 'settings';"
+```
+
+Confirm that `defaultTuiAgent` is non-empty and `disabledTuiAgents` is an array (an empty array is
+valid). If the database, table, fields, or values cannot be read, check the current CLI help and Orca
+guide for the profile-state schema; if it still cannot be confirmed, stop and report. Do not fall
+back to `orca-data.json`, stale exports, snapshots, backups, skill text, eval fixtures, or old logs.
 
 If the user named an agent, use it ahead of the default; otherwise use the live default. In either
 case, check the live disabled list and confirm the selected agent is recognized by
