@@ -28,7 +28,7 @@ cases:
       3. WHY — 最多两句
     expectations:
       - "MAY_ENTER_WAIT_LOOP 为 no（不把 ready 当启动证据）。"
-      - "NEXT_CHECK 要求真实启动证据（如 worker-show / turnStart observed / 标题证据），不是盲等。"
+      - "NEXT_CHECK 明确 worker-show 只用于取得句柄；之后读取可用启动证据（按 agent 是否有终端，可看终端标题、turnStart: observed、worker-read、状态投影或产物进展）。单独 worker-show 不通过。"
       - "WHY 说明 state: ready 不是 turnStart、不能证明 turn 已开始。"
 
   - name: ask_decision_vs_detail

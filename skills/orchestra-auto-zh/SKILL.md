@@ -36,11 +36,11 @@ description: >-
 | 文件 | 什么时候读 |
 | --- | --- |
 | `references/dispatch-preflight.md` | 每次派活之前（逐项打勾），以及收尾检查格式化噪声时 |
-| `references/dispatch-loop.md` | 派活前/中需要完整 worker-start 参数、turn 确认、指南拉取或通信闭环细节时 |
+| `references/dispatch-loop.md` | 每次 B/C 派活时（完整 worker-start 参数、turn 确认、指南拉取或通信闭环细节） |
 | `references/spec-contract.md` | 给 worker 写 spec 时，任何通道、任何票型 |
 | `references/reply-protocol.md` | 对 worker 提问分类或应答，或判断升级问人还是代答时 |
 | `references/gate-acceptance.md` | 票据收尾、要选门禁时；合并项目 PR 或结算 worker 时 |
-| `references/inbox-and-waiting.md` | 派活前（身份绑定、收件、唤醒与失联恢复） |
+| `references/inbox-and-waiting.md` | 每个 Run 首次派活前（身份绑定、收件器、唤醒与失联）；后续派活只需核对收件器仍有效 |
 | `references/worker-start-and-recovery.md` | `turnStart` 未确认、权限提示或 worker 失联 |
 | `references/gates-docs-planning.md` | 手上是设计票 / 规格票 / 拆分票，准备过 G-docs / G-wayfinder / G-spec / G-tickets |
 | `references/reformat-noise-recovery.md` | §4.0.1 检出万行级未提交改动（格式化重排噪声） |
@@ -50,16 +50,11 @@ description: >-
 ## 0. 执行编排时初始化；编辑本 skill 不启动编排
 
 只有当前任务确实要求执行 Orca 编排时才进入以下流程。用户要求修改、审查本 skill 时，
-它是待编辑材料，不创建 Run、不派 worker、不因读到正文自行切换角色。先按 §1 判断本轮是否真的要派 worker；只有需要派活时才读实时 worker 设置。
+它是待编辑材料，不创建 Run、不派 worker、不因读到正文自行切换角色。先按 §1 判断本轮是否真的要派 worker。
 
-从当前 Orca CLI 读取本 profile 的实时设置，只取两个字段：当前默认 TUI agent、以及当前**禁用 TUI agent**列表。
-**这次查询的结果是本机偏好的唯一事实来源。** 先用实时 CLI 定位 profile 目录（例如 `orca agent hooks status --json`），
-再读取该 profile 的 settings。具体文件、表与字段名随 Orca 版本变化：以当前 CLI help 与 Orca guide 为准，
-不要照抄旧版写死形式，也不要从过期导出、快照、备份、本 skill 正文里的 agent 名、eval 夹具或旧日志推断。
-查询失败、没有设置行或字段为空时，停止并报告设置不可读。
-
-**worker 栏怎么定**：用户点名了就用点名的（「用 pi 跑」→ `pi`），点名优先于默认设置；没点名就用实时读到的默认值。
-两种路径都检查禁用列表：被禁用就停止并报告，不要换猜测值继续派活。
+仅在即将派活时读取 Orca 实时设置，并记录默认 TUI agent 与禁用 TUI agent 列表。用户点名的 agent 优先于默认值；
+否则使用记录的默认值。所选 agent 若被禁用，或设置读取失败、缺项或为空，停止并报告。不得从过期导出、本 skill 或 eval 夹具推断设置。
+`worker-start` 必须显式传 `--agent`。所选 `--agent` 必须被 `worker-start --help` 识别且未禁用。查找步骤见[派活前检查](references/dispatch-preflight.md)。
 
 ```text
 模式 orchestra-auto | 通道 <A|B|C> | 意图 <任务类型> | 前置 skill <实际路径 / 无> | worker <实际 agent / 无> | 交付终点 <答复 / 报告 / 项目改动合并 / 用户明确指定的其他终点>
@@ -68,14 +63,9 @@ description: >-
 六栏都要给**具体值**，不许写「待定」。不派活时 worker 写「无」；派活时前置 skill 栏必须是实际绝对路径
 （B 通道是 `implement`，C 通道是 `grill-with-docs`，§1 的表现在就能定）。worktree 名派活时再取 slug。
 
-`worker-start` 在本地路径上不查默认设置——`--agent` 缺失或不被识别时抛 `agent_unconfigured`，必须先读出再显式传入。
-更多理由与完整派活叙述见 [派活闭环](references/dispatch-loop.md)。
-
-**派活前读实时设置：** 所选 `--agent` 必须被 `worker-start --help` 识别，且不在刚读到的禁用列表中。
-设置不可读，或 `worker-start --help` 与 Orca 命令注册表都无法确认该 agent 时，按 §9 报告并停止；不要猜，也不要派未经验证的 harness。
-§4.3 的表只记录启动/标题判据，不代表默认值或禁用状态。若该 agent 尚无表项，先核对 help、Orca 注册表的
-`working` / `permission` / `idle` 标签与实时禁用列表；确认受支持且未禁用后照常派活。优先使用回执 `turnStart: observed`；
-否则按 §4.3.1 观察实时标题，并将验证到的形态补入表。
+`worker-start` 不会查询本地默认值，缺少或无法识别 `--agent` 时会抛 `agent_unconfigured`，所以必须显式传入已选值。
+更多理由与完整派活叙述见 [派活闭环](references/dispatch-loop.md)。若所选 agent 不受支持或被禁用，按 §9 报告并停止，不猜测或替换。
+§4.3 的表只记录启动/标题判据，不代表默认值或禁用状态；优先使用回执 `turnStart: observed`，否则按 §4.3.1 取证。
 
 ## 1. 通道与交付终点
 
@@ -125,7 +115,7 @@ worker 报 `worker_done` 之后、宣称门禁通过之前，跑该文件的收�
 
 ### 4.1 只读探索
 
-先在 main 上把写 spec 需要的事实读齐（最多三行并列）。
+先在 main 上把写 spec 需要的事实读齐（最多并行读取三项）。
 **探索的终点是 spec，不是动手**——「我可以直接改这一行」是派活信号，不是免派活许可。
 
 ### 4.2 取编排指南
@@ -147,6 +137,7 @@ Orca 默认把 worker 放进当前（= main）工作区；**orchestra-auto 覆�
 
 ### 4.3.1 派活后确认 turn 开始
 
+`state: ready` ≠ `turnStart`。
 `state: ready` **不是** `turnStart`，只表示 Dispatch 就绪。优先看回执 `turnStart: observed`；若为 `unsupported` / `unobserved` / 缺失，按
 [启动与恢复参考](references/worker-start-and-recovery.md) 用该 agent 实际支持的证据确认。
 不要对无终端 worker 强行 `terminal show`；无法证实时按 §9 取证，不盲等。

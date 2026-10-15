@@ -7,23 +7,8 @@ a circuit breaker trips, or the Orca app restarts mid-run.
 
 - If the CLI will not start or the orchestration guide cannot be fetched: report the exact error
   and stop. **Do not swap the executable and do not guess commands.**
-- **When a `worker-start` receipt says `state: failed`, gather evidence before deciding; do not
-  relaunch blindly.** One observed case had `failedStage: agent_readiness` /
-  `lastError: terminal_handle_stale`: it read like the terminal was gone, but the evidence showed
-  **both terminals still present and the worktree already created** — the setup terminal was
-  `status: exited` with `tail: []` (zero output), because the readiness check judged before setup
-  finished. The full 6-step evidence and re-dispatch procedure is in
-  `references/failed-dispatch-recovery.md` (read it only when you get `state: failed`). Skeleton:
-  1. **Read the receipt's four fields** (`failedStage` / `lastError` / `recovery` /
-     `residualResources`), then check whether the terminals and the worktree are in fact still
-     there — criteria and commands are in that file.
-  2. **Verify the hook itself**: run the setup command manually in the worktree; if it passes,
-     the failure was transient.
-  3. **Re-dispatch per `recovery`**: `--retry-of` together with `--task`, releasing the failed
-     Dispatch first, then confirm the turn started per §4.3.1.
-  **Why this is separate**: `terminal_handle_stale` reads like "cannot re-dispatch", while the
-  positive guidance is sitting on disk. **"No relaunch" means no unconditional retry, not no retry
-  per the recovery instructions.**
+- When a `worker-start` receipt says `state: failed`, gather evidence before deciding; do not
+  relaunch blindly. Follow the [failed-dispatch recovery](failed-dispatch-recovery.md) procedure.
 - When anything trips a breaker (per ticket: two consecutive failures of the same gate; run level:
   §6's cumulative send-back threshold) or an escalation-class issue (freeze that ticket, keep the
   rest going, §5.1) → stop and ask the human immediately, stating which stage you are stuck in,

@@ -3,6 +3,20 @@
 **When to read this**: before every dispatch (tick every line), and again at teardown after a
 worker reports `worker_done` and before you declare a gate passed.
 
+### Live worker settings lookup
+
+Only do this lookup when the Run is about to dispatch. Use the live Orca CLI to locate the current
+profile (for example, `orca agent hooks status --json`), then use the current CLI help and Orca
+guide to identify that profile's settings document and the current default TUI-agent and
+disabled-TUI-agent fields. File, table, and field names vary by Orca version; do not assume an
+older layout. Record both values for the dispatch decision. If the document or either value is
+unavailable or empty, stop and report; never substitute a stale export, snapshot, backup, skill
+text, eval fixture, or old log.
+
+If the user named an agent, use it ahead of the default; otherwise use the live default. In either
+case, check the live disabled list and confirm the selected agent is recognized by
+`worker-start --help`. A disabled, unrecognized, or unreadable selection stops dispatch.
+
 ### 4.0 Pre-dispatch tick sheet (tick every line; do not dispatch until all are green)
 
 Its only purpose is to turn "did I forget one?" into a checklist rather than a memory test —

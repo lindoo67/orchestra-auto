@@ -30,7 +30,7 @@ cases:
       3. WHY — two sentences max
     expectations:
       - "MAY_ENTER_WAIT_LOOP is no (or equivalent refusal to treat ready as start)."
-      - "NEXT_CHECK asks for real start evidence (e.g. worker-show / turnStart observed / title evidence), not blind waiting."
+      - "NEXT_CHECK says worker-show is only used to obtain the handle; then it reads available start evidence (terminal title when available, turnStart: observed, worker-read, status projection, or artifact progress as supported by the agent). worker-show alone is not sufficient."
       - "WHY explains that state: ready is not turnStart / not proof a turn began."
 
   - name: ask_decision_vs_detail

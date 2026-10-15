@@ -2,6 +2,16 @@
 
 **什么时候读**：每次派活之前（逐项打勾），以及 worker 报 `worker_done` 之后、宣称门禁通过之前的收尾阶段。
 
+### 实时 worker 设置查找
+
+仅在 Run 即将派活时查询。先用实时 Orca CLI 定位当前 profile（例如 `orca agent hooks status --json`），
+再依据当前 CLI help 与 Orca guide 找到该 profile 的 settings 文档及默认 TUI agent、禁用 TUI agent 字段。
+文件、表和字段名随 Orca 版本变化，不假设旧版布局。记录这两个值；文档或任一值不可读、缺失或为空时停止并报告，
+不得用过期导出、快照、备份、本 skill 文本、eval 夹具或旧日志替代。
+
+用户点名 agent 时优先使用点名值，否则使用实时默认值；两种情况都核对实时禁用列表，并确认 `worker-start --help` 能识别所选 agent。
+若被禁用、不受支持或设置不可读，停止派活。
+
 ### 4.0 派活前 tick sheet（逐项打勾，未全绿不 dispatch）
 
 唯一作用是让「我是不是漏了哪条」变成一次勾选，而不是靠记性——长 spec 写到后半段时，前面

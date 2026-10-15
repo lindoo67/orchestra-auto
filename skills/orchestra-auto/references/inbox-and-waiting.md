@@ -1,7 +1,8 @@
 # Communication, wakeups and lost-contact recovery
 
-**When to read this**: before dispatching the first worker of a Run. Command semantics follow this
-round's `orca skills get orchestration` and its messaging and worker-contract references. This file
+**When to read this**: before the first dispatch of each Run, for identity binding, inbox setup,
+wakeups, and lost-contact recovery. Before later dispatches, only verify that the inbox remains
+active. Command semantics follow this round's `orca skills get orchestration` and its messaging and worker-contract references. This file
 uses `<ORCA>` for the executable chosen this round; the script receives that path through
 `ORCA_CLI_COMMAND`.
 

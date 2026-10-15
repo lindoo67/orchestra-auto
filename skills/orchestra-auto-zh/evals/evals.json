@@ -219,28 +219,28 @@
     {
       "id": 6,
       "name": "default-worker-follows-setting",
-      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「帮我把 settings 页那个开关的文案改一下，改成「自动同步」。改完开 PR。」\n\n（这句里没有提到任何 worker / agent 名字。）\n\n请只输出这几项，不要真的跑命令：\n1. RESOLVE: 你这一轮用哪个 worker，依据是什么（写清你会跑的读取命令与字段路径）\n2. DECL: 你的完整模式声明\n3. NONDEFAULT: 假如你读到的设置值与你直觉想派的不是同一个，你派哪个，为什么\n4. ELIGIBLE: 你还会先确认什么，才敢直接把它写进 --agent\n\n请严格按这 4 个标签输出，每条都要有具体内容。",
-      "expected_output": "RESOLVE 说明去读 Orca 的实时设置：先用实时 CLI 定位 profile 目录，再读该 profile 的 settings 文档取默认 TUI agent，而不是凭直觉、更不是读旁边那份过期导出文件；DECL 的 worker 栏是具体值而非「待定」/「跟随默认」；NONDEFAULT 以设置为准；ELIGIBLE 先查当前禁用列表（不能靠 which）。",
+      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「帮我把 settings 页那个开关的文案改一下，改成「自动同步」。改完开 PR。」\n\n（这句里没有提到任何 worker / agent 名字。）\n\n评估设置夹具（这是本题的权威实时值，请直接按夹具回答，不依赖本机设置，也无需跑命令）：\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent（已过期且不可用，不要使用）。\n\n请只输出这几项，不要真的跑命令：\n1. RESOLVE: 你这一轮用哪个 worker，依据是什么（指出夹具中的字段）\n2. DECL: 你的完整模式声明\n3. NONDEFAULT: 假如夹具设置值与你直觉想派的不是同一个，你派哪个，为什么\n4. ELIGIBLE: 你还会先确认什么，才敢直接把它写进 --agent\n\n请严格按这 4 个标签输出，每条都要有具体内容。",
+      "expected_output": "RESOLVE 按夹具中的 LIVE_DEFAULT_TUI_AGENT 选择 `fixture-agent`，不读取本机设置；STALE_EXPORT_DEFAULT=old-agent 已明确过期且不可用。DECL 的 worker 是具体值 `fixture-agent`；NONDEFAULT 服从夹具；ELIGIBLE 在传 --agent 前检查夹具 DISABLED_TUI_AGENTS=[]（不能靠 which）。",
       "files": [],
       "assertions": [
         {
-          "text": "RESOLVE 从 Orca 的实时默认 TUI agent 设置取 worker",
+          "text": "RESOLVE 按夹具 LIVE_DEFAULT_TUI_AGENT 选择 fixture-agent，不读取本机设置",
           "name": "resolve_reads_default_agent"
         },
         {
-          "text": "RESOLVE 说明实时取值路径（先用实时 CLI 定位 profile，再读该 profile 的 settings 文档）。把旁边的过期导出文件当实时值就是错的",
+          "text": "RESOLVE 将夹具作为权威来源，并拒绝使用已过期且不可用的 STALE_EXPORT_DEFAULT=old-agent",
           "name": "resolve_names_lookup"
         },
         {
-          "text": "DECL 写出具体的 worker 值，没有「待定」/「跟随默认」占位符",
+          "text": "DECL 写出具体 worker 值 fixture-agent，没有「待定」/「跟随默认」占位符",
           "name": "decl_worker_concrete"
         },
         {
-          "text": "NONDEFAULT 以设置为准而不是凭直觉",
+          "text": "NONDEFAULT 服从夹具设置值而不是凭直觉",
           "name": "nondefault_follows_setting"
         },
         {
-          "text": "ELIGIBLE 在传 --agent 之前先查禁用列表",
+          "text": "ELIGIBLE 在传 --agent 前检查夹具 DISABLED_TUI_AGENTS=[]，不使用 which",
           "name": "eligible_checks_disabled"
         }
       ]
@@ -248,8 +248,8 @@
     {
       "id": 7,
       "name": "channel-routing",
-      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「settings 页那个开关的文案改一下，改成「自动同步」。改完开 PR。」\n\n请只输出你的模式声明那六栏（格式照 skill 要求，一栏不缺），然后额外用一行注释说明你为什么走这条通道。不要真的跑命令、不要派 worker。\n\n写完之后，再回答这个追加问题：假如你把这句话改成「就改个按钮颜色，一行的事，别搞那么重」，你的通道判定会变吗？为什么？",
-      "expected_output": "通道 B、前置 implement 绝对路径、worker 取 Orca 实时设置或用户点名值，交付终点为项目改动合并。单文件小改仍在隔离 worktree 中完成，worker 创建 PR；门禁通过后 coordinator 自动合并，不再逐张请用户确认。",
+      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「settings 页那个开关的文案改一下，改成「自动同步」。改完开 PR。」\n\n评估设置夹具（这是本题的权威实时值，请直接按夹具回答，不依赖本机设置，也无需跑命令）：\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent（已过期且不可用，不要使用）。\n\n请只输出你的模式声明那六栏（格式照 skill 要求，一栏不缺），然后额外用一行注释说明你为什么走这条通道。不要真的跑命令、不要派 worker。\n\n写完之后，再回答这个追加问题：假如你把这句话改成「就改个按钮颜色，一行的事，别搞那么重」，你的通道判定会变吗？为什么？",
+      "expected_output": "通道 B、前置 implement 绝对路径、worker 是夹具 LIVE_DEFAULT_TUI_AGENT=fixture-agent（用户没有点名 agent），交付终点为项目改动合并。单文件小改仍在隔离 worktree 中完成，worker 创建 PR；门禁通过后 coordinator 自动合并，不再逐张请用户确认。",
       "files": [],
       "assertions": [
         {
@@ -261,7 +261,7 @@
           "name": "decl_pre_skill_abs_path"
         },
         {
-          "text": "模式声明的 worker 栏是从 Orca 实时默认 TUI agent 读到的具体值（或用户点名的那个），不是占位符",
+          "text": "模式声明的 worker 栏为夹具 LIVE_DEFAULT_TUI_AGENT=fixture-agent，不依赖本机值或占位符",
           "name": "decl_worker_concrete"
         },
         {
@@ -380,13 +380,13 @@
     {
       "id": 11,
       "name": "worker-slot-follows-setting-not-habit",
-      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「src/lib/queue.ts 里那个重试退避还是写死的 1000ms，改成指数退避加个 30s 上限，顺手补两个测试。跑完给我 PR。」\n\n（这句里没有提到任何 agent / worker / harness 的名字。）\n\n两个背景事实：\n- 上一轮编排用了某个 agent，这个仓库里也确实有一堆那个 agent 的痕迹（本地插件忽略文件之类）。\n- 你自己没有点名 agent。\n\n请只输出你这一回合会产出的东西，不要真的派 worker、不要建 worktree：\n1. DECL: 你的完整模式声明（六栏齐全，格式照 skill 要求）\n2. JUSTIFY: worker 那一栏的值是怎么来的？写清你依据的是什么\n3. DISCONFIRM: 如果你第一反应想填上轮那个 agent，请说明你凭什么改掉它\n\n请严格按这 3 个标签输出，每条都要有具体值，不许写「待定」「读设置确定」这类占位符。",
-      "expected_output": "交付终点为项目改动合并，门禁通过后自动合并 PR；worker 栏必须是 Orca 实时默认 TUI agent 的真实值，且 JUSTIFY 明确指向「读取实时 settings 文档里的默认 TUI agent 字段」这一来源，而不是「skill 里这个 agent 出现得多」「上轮用的它」「仓库有它的痕迹」。DISCONFIRM 要点名这些拉力并逐个否掉。关键在于：断言卡的是**依据**而不是**值**——只写「worker <某个 agent>」而不交代读取来源的，不算通过。另有一条反向陷阱：实时设置旁边那份 JSON 导出是迁移前快照，其默认 TUI agent 与实时值不同，据此填写即为用错来源。",
+      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「src/lib/queue.ts 里那个重试退避还是写死的 1000ms，改成指数退避加个 30s 上限，顺手补两个测试。跑完给我 PR。」\n\n（这句里没有提到任何 agent / worker / harness 的名字。）\n\n评估设置夹具（这是本题的权威实时值，请直接按夹具回答，不依赖本机设置，也无需跑命令）：\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent（已过期且不可用，不要使用）。\n\n两个背景事实：\n- 上一轮编排用了 `habit-agent`，这个仓库里也确实有一堆它的痕迹（本地插件忽略文件之类）。\n- 你自己没有点名 agent。\n\n请只输出你这一回合会产出的东西，不要真的派 worker、不要建 worktree：\n1. DECL: 你的完整模式声明（六栏齐全，格式照 skill 要求）\n2. JUSTIFY: worker 那一栏的值是怎么来的？写清你依据的是什么\n3. DISCONFIRM: 如果你第一反应想填上轮那个 agent，请说明你凭什么改掉它\n\n请严格按这 3 个标签输出，每条都要有具体值，不许写「待定」「读设置确定」这类占位符。",
+      "expected_output": "交付终点为项目改动合并，门禁通过后自动合并 PR；worker 栏必须等于夹具 `LIVE_DEFAULT_TUI_AGENT=fixture-agent`，JUSTIFY 明确以该夹具为依据，而不是本机设置、skill、仓库痕迹或 `habit-agent`。DISCONFIRM 否掉这些拉力，并指出值即使碰巧相同也不改变依据。`STALE_EXPORT_DEFAULT=old-agent` 已明确过期且不可用。",
       "files": [],
       "assertions": [
         {
-          "text": "DECL 的 worker 栏等于本机实时的默认 TUI agent。自己核验：先用实时 Orca CLI 定位 profile 目录（它报出的设置路径），再读该 profile 的 settings 文档里的默认 TUI agent 字段。不要拿旁边那份 JSON 导出核验：它是迁移前快照、默认值已过期，引用那个值的运行用错了来源，即使那个 id 看起来很像真 agent 也必须判不通过",
-          "name": "decl_worker_matches_real_setting"
+          "text": "DECL 的 worker 栏等于夹具 LIVE_DEFAULT_TUI_AGENT=fixture-agent。不得使用本机设置或 STALE_EXPORT_DEFAULT=old-agent（已明确过期且不可用）",
+          "name": "decl_worker_matches_fixture_setting"
         },
         {
           "text": "DECL 的 worker 栏是具体 agent id——声明里没有「待定」/「读设置确定」/「跟随默认」这类占位符",
@@ -397,15 +397,15 @@
           "name": "decl_all_slots"
         },
         {
-          "text": "JUSTIFY 把 worker 值建立在真的读取了 Orca 实时设置之上（点名实时设置查询或默认 TUI agent 字段），不是 skill 正文、仓库痕迹或上一轮用了什么",
+          "text": "JUSTIFY 把 fixture-agent 建立在夹具 LIVE_DEFAULT_TUI_AGENT 之上，而不是本机设置、skill、仓库痕迹或上一轮选择",
           "name": "justify_setting_not_habit"
         },
         {
-          "text": "DISCONFIRM 明确说明为什么上轮那个 agent 会是反射式的第一反应，并否掉它作为依据——同时指出在有些机器上它恰好吃就是实时设置值，所以依据必须是「读过设置」，而不是「值正好是它」",
+          "text": "DISCONFIRM 否掉 habit-agent 和仓库痕迹，并指出即使值碰巧相同也不改变依据：worker 由夹具决定",
           "name": "disconfirm_rejects_habit"
         },
         {
-          "text": "没有用「skill 里出现频率高」「仓库有该 agent 痕迹」「上一轮用了它」来论证 worker 选择",
+          "text": "没有用 skill 出现频率、仓库 habit-agent 痕迹或上一轮使用 habit-agent 来论证选择",
           "name": "not_agent_by_habit"
         },
         {
@@ -417,32 +417,20 @@
     {
       "id": 12,
       "name": "read-setting-before-declare",
-      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「board 卡片那个空状态加个插画，占位高度 120px，别的别动。」\n\n（这句里没有提到任何 agent / worker / harness 的名字。）\n\n请只输出你这一回合的动作顺序与产出，不要真的跑命令、不要派 worker：\n1. ORDER: 你这一回合的第一个动作是什么？紧接着第二个动作是什么？按先后写清，并说明为什么是这个顺序（不能是「同时做」或「视情况」）\n2. IF_CONFLICT: 假如你的动作顺序和 skill 里某条「先声明、不要有任何工具调用」的要求冲突了，你怎么办？说出你选哪边、为什么\n3. OUTPUT: 你的模式声明原文（六栏齐全）\n\n请严格按这 3 个标签输出，每条都要有具体值。",
-      "expected_output": "ORDER 是「先跑读取实时默认 TUI agent 的那条只读命令，紧接着输出六栏齐全的模式声明」，并说明理由：worker 栏要的是具体值，而那个值只能读出来，所以读设置是声明的组成部分而不是它的前置障碍。IF_CONFLICT 指出旧表述「声明早于该回合任何工具调用」正是与「六栏不许待定」构成死锁的那一条，应以「先读后声明」为准——而不是先声明再补一句，也不是写占位符。OUTPUT 里 worker 栏是具体值。",
+      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「board 卡片那个空状态加个插画，占位高度 120px，别的别动。」\n\n（这句里没有提到任何 agent / worker / harness 的名字。）\n\n请使用题目给定的设置夹具（不要查询本机设置、不要跑命令或派 worker），只输出：\n1. RESOLVE: 按夹具应选的 worker 及理由\n2. OUTPUT: 你的模式声明（六栏齐全）\n\n请严格按这 2 个标签输出，每条都要有具体值。",
+      "expected_output": "RESOLVE 按夹具 LIVE_DEFAULT_TUI_AGENT 选择 fixture-agent，无需查询本机。OUTPUT 六栏齐全且 worker=fixture-agent，没有占位符。",
       "files": [],
       "assertions": [
         {
-          "text": "ORDER 把读取 Orca 实时默认 TUI agent 放在第一步、模式声明紧跟其后，写成两个有序步骤（不是同时做，也不是先声明后打补丁）",
-          "name": "order_read_then_declare"
+          "text": "RESOLVE 使用夹具 LIVE_DEFAULT_TUI_AGENT=fixture-agent，不要求查询本机设置",
+          "name": "resolve_uses_fixture"
         },
         {
-          "text": "ORDER 解释了为什么读在前：worker 栏需要一个只能读出来的具体值，所以这次读取是产出声明的一部分",
-          "name": "order_explains_why"
+          "text": "OUTPUT 六栏齐全且 worker=fixture-agent",
+          "name": "output_uses_fixture_agent"
         },
         {
-          "text": "IF_CONFLICT 用「先读后声明」解决旧的「先声明、不许任何工具调用」表述，而不是试图同时满足两者",
-          "name": "conflict_resolved"
-        },
-        {
-          "text": "IF_CONFLICT 没有选择「先声明、事后再把 worker 栏补上」",
-          "name": "no_declare_then_patch"
-        },
-        {
-          "text": "没有为了满足不许占位而往 worker 栏里写占位符（例如「读 Orca 设置确定」/「待定」）",
-          "name": "no_placeholder_escape"
-        },
-        {
-          "text": "OUTPUT 的 worker 栏不是写出来的占位符——没有「<读设置确定>」/「待定」/「跟随默认」/「本回合读到的值」。按声明的字面判断：worker 栏除裸 agent id 之外还有别的内容即不通过。（题目禁止跑命令，因此不要求写出具体 id，也不得以写没写具体 id 作为判定依据——只判有没有占位符）",
+          "text": "OUTPUT 的 worker 栏没有待定或跟随默认等占位符",
           "name": "output_no_placeholder"
         }
       ]
