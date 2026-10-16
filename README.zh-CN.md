@@ -20,19 +20,6 @@
 coordinator 负责规划、通信与验收；worker 负责编辑、提交与创建 PR。门禁通过后由 coordinator
 合并——不再逐张票据请人确认。
 
-```text
-用户输入
-  → 确定交付终点与通道
-  → 铁律自检（主工作副本上不写入）
-  → 把 worker 派进它自己的顶层 worktree
-  → 后台收消息，前台继续推进
-  ⇄ 应答 worker（决策问人，细节代答）
-  → 门禁验收（G-impl）
-  → 打回或推进
-  → 项目 PR 过 G-merge 后：合并、同步 main、收尾 worker
-  → 收口报告
-```
-
 skill 不会拿来交换的安全不变量：
 
 - **隔离**：每个 worker 都有自己的顶层 worktree；coordinator 绝不在 worker 的 worktree 里编辑
@@ -48,6 +35,204 @@ skill 不会拿来交换的安全不变量：
 - **先验收后合并**：合并等门禁；异常 diff 先留证，再谈处理。
 - **失败有停止阈值**：有界重试、单票熔断与 run 级熔断。
 - **生命周期收尾**：已结算 worker 被 release、retain 或派 follow-up Task——没有静默遗弃。
+
+## 全流程（端到端）
+
+四个面板，按顺序读就是完整流程。蓝色是流程步骤，橙色菱形是判定，紫色是要人来定夺的地方，绿色是本轮
+终点或某条恢复流程的起点，红色是失败与打回，淡色底框是下一步之前必须全绿的打勾清单。
+
+### 1 · 把 worker 派起来（§0–§4.4）
+
+用户一句话的请求，要变成一个跑在独立顶层 worktree 里的 worker。没有 turn 启动证据，下面任何一步都到
+不了。
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    START["用户用一句话提出本轮请求"] --> DECL["§0 六栏声明：模式 / 通道 / 意图 / 前置 skill 绝对路径 / worker / 交付终点——不许写「待定」"]
+    DECL --> CH{"§1 这个请求走哪条通道？"}
+    CH -->|"A——解释、状态、讨论、口头研究结论"| ANS["直接答复：不派 worker、不写仓库"]
+    ANS --> DONE_A["没有要派的话，也没有要合并的东西"]
+    CH -->|"B——边界清楚的小改动、修 bug、已有 spec 或票"| SCOUT["§4.1 在 main 上做只读探索——终点是 spec，不是动手"]
+    CH -->|"C——多票、或需求尚未收敛的完整实施"| CONV["§1 先收敛需求与依赖：grill-with-docs、to-spec、to-tickets，再沿 DAG 派活"]
+    CONV --> PLAN8["§8 本轮真正需要的规划配置，由 worker 在独立 worktree 落盘、coordinator 验收"]
+    PLAN8 --> HARD
+    SCOUT --> HARD
+    HARD["§2 铁律自检：凡项目文件写入都归 worker 在其 worktree 内完成——绝不写主工作副本，绝不写 worker 的 worktree"]
+
+    HARD --> PF
+    subgraph PF["§4.0 派活前检查——逐项打勾，未全绿不 dispatch"]
+        P1["CLI 存活，编排指南已落盘"]
+        P2["通道与票型已定，票型和门禁是 spec 里的一行"]
+        P3["spec 完整：BEHAVIOR RULE 与前置 skill 路径，Target / Change / Constraints / Ownership / Observable acceptance"]
+        P4["落点显式：new-top-level、票 slug、选定的 agent"]
+        P5["spec 里每个基线数字都出自本票的 base commit"]
+        P6["实施票写明 code-review，除非 §3 豁免且理由已写下来"]
+    end
+    PF --> SETTINGS
+    SETTINGS["§0 / §4 读实时 worker 设置：当前默认 TUI agent 与禁用列表"]
+    SETTINGS --> USABLE{"所选 agent 被识别且未被禁用？"}
+    USABLE -->|"否"| FAILSTOP["§9 报精确错误并停止；绝不猜，也不擅自替换 worker"]
+    USABLE -->|"是"| DISPATCH["§4.3 worker-start --worktree new-top-level --name 票 slug --setup run --agent 所选 agent --json"]
+    DISPATCH --> TURN{"§4.3.1 回执是 turnStart: observed？"}
+    TURN -->|"是"| LIVE
+    TURN -->|"否"| PROVE{"证据能证明 turn 真的开始了？"}
+    PROVE -->|"是"| LIVE
+    PROVE -->|"否"| FAILSTOP
+    LIVE["worker 已在它自己的顶层 worktree 里跑起来——继续看面板 2 的通信闭环"]
+
+    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef stop fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
+    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class START,DECL,HARD,P1,P2,P3,P4,P5,P6,SETTINGS,DISPATCH,SCOUT,CONV,PLAN8,LIVE phase
+    class CH,USABLE,TURN,PROVE gate
+    class FAILSTOP stop
+    class ANS,DONE_A ok
+```
+
+### 2 · 通信闭环（§4.5–§5）
+
+最容易做错的一段：coordinator 不是在轮询，而是在被唤醒——收件器**结束进程**就是唤醒。处理批次与装回
+下一次等待是一步，提问先分类再决定谁来答。
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    LIVE["worker 正在跑——这一面板就是让它持续前进的通信闭环"] --> INBOX["§4.5 每个 Run 装唯一收件器，作为 harness 能呈现的长调用——不用 nohup——台账存在仓库外"]
+
+    INBOX --> LOOP["§4.5 闭环本体：收件器在唤醒事件上结束进程，这个结束就是唤醒"]
+    LOOP --> WAKE["唤醒线：新的非心跳批次、worker 状态变化，或收件器自身出错"]
+    WAKE --> HANDLE["处理整批：核对 Run、Task、Dispatch，按 message ID 去重"]
+    HANDLE --> CLS{"§5 分类这条消息"}
+    CLS -->|"提问"| HUM["决策类或 escalation 五类：附上你的倾向请人定夺——worker 的推荐只是参考"]
+    CLS -->|"提问"| DET["细节类：coordinator 依据 ADR、spec 或用户原话代答"]
+    CLS -->|"escalation"| ESC["escalation 只冻结该票；其余票照常推进门禁"]
+    HUM --> REPLY["reply --id message-id"]
+    DET --> REPLY
+    ESC --> REPLY
+    REPLY --> ACKF["整批处理完才 ack，用那次读取快照的 deliveryId"]
+    ACKF --> REARM["装回下一次等待——唤醒之后没有新等待就是静默停摆"]
+    REARM --> WAKE
+    CLS -->|"worker_done"| ACCEPT["§6 门禁验收——面板 3"]
+    INBOX --> BOUND["harness 没有唤醒通道？把 turn 保持在 ≤60 秒的有界等待里，三轮无进展就按证据恢复"]
+    BOUND -.-> WAKE
+
+    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
+    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class LIVE,INBOX,LOOP,WAKE,HANDLE,DET,REPLY,ACKF,REARM,BOUND phase
+    class CLS gate
+    class HUM,ESC human
+    class ACCEPT ok
+```
+
+### 3 · 验收、合并与收尾（§6–§7）
+
+`worker_done` 不等于验收通过：先跑收尾检查，再按票型选门禁，只有全绿才进入合并。同一票同门禁连续失败
+两次暂停该票；跨票打回累计五次暂停整个 run。
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    ACCEPT["面板 2 的 worker_done 送到这里——门禁验收起点"] --> NOISE{"§4.0.1 收尾检查：在 worktree 里 git status --porcelain 与 diff --numstat"}
+    NOISE -->|"万行级"| REFORM["格式化重排噪声：先留证，由 worker 恢复，然后打回"]
+    NOISE -->|"正常未提交改动"| WHY["追问 worker 为什么还有未提交内容——不默认接受"]
+    NOISE -->|"干净"| PROP["§3 / §6 深度：可圈定的单票跑受影响测试，共享接口或影响面不明跑全量；省略双轴 review 必须把理由写进 spec 与 Answer"]
+    REFORM --> SEND
+    WHY --> SEND
+    PROP --> GATES["§6 按票型选门禁：研究查来源 / G-docs / G-wayfinder / G-spec / G-tickets / G-impl"]
+    GATES --> GREEN{"门禁在可观察结果与证据上全绿？"}
+    GREEN -->|"否"| SEND["打回：哪个门禁没过、缺什么证据、具体要补什么"]
+    SEND --> BREAK{"同一票同门禁连续失败两次，或 run 级打回累计五次？"}
+    BREAK -->|"是"| STOP9["§9 停止派活，把人要的状态与证据交给人"]
+    BREAK -->|"否"| RECYCLE["派 follow-up Task，或对复用终端写明原 worktree selector；新 turn 重跑 §4.3.1——回到面板 2 的闭环"]
+    GREEN -->|"是"| MERGE["§6.5 G-merge：多 PR 时由集成 worker 按既定合并顺序组合最终 head，先验组合结果"]
+    MERGE --> EXC{"用户明确要求保留 PR 不合并——「要求开 PR」不算——或有规则、门禁挡住了合并？"}
+    EXC -->|"是"| KEEP["保留 PR、如实报告状态，本轮在此收口"]
+    EXC -->|"否"| SYNC["按 DAG 或 stack 顺序合并，再按 §6.5.1 只在干净副本上拉取已合并 main，并用 merge-base --is-ancestor 校验"]
+    KEEP --> REPORT
+    SYNC --> LIFE["§6.5 worker 生命周期：follow-up、retain 或 release，然后查 reclaimable 并逐项结清"]
+    LIFE --> REPORT["§7 收口报告写在 repo 外持久目录：产物与合并 SHA、验收证据、人定决策、未完成项、生命周期清点"]
+    REPORT --> DONE_B["§7 到达约定交付终点即停止——通常是项目改动已合并"]
+
+    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
+    classDef stop fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
+    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class ACCEPT,NOISE,WHY,PROP,GATES,MERGE,SYNC,LIFE,REPORT phase
+    class GREEN,BREAK,EXC gate
+    class STOP9 human
+    class REFORM,SEND,KEEP,RECYCLE stop
+    class DONE_B ok
+```
+
+### 4 · 失败分支（§9）
+
+失败不是一个节点：每个入口都有自己的处置流程，而它们的共同形状是——先取证、再决定、报精确错误、绝不
+无条件 relaunch。
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    E1["CLI 起不来，或取不到编排指南"] --> R1A["报精确错误并停止——不换可执行文件，不猜命令"]
+
+    E2["worker-start 回执 state: failed"] --> R2A["① 读回执四字段：failedStage / lastError / recovery / residualResources"]
+    R2A --> R2B["② 三条只读命令：terminal show、git worktree list、terminal read"]
+    R2B --> R2C{"终端还在、worktree 已建、setup 零输出退出？"}
+    R2C -->|"是——是 readiness 判早，不是票的问题"| R2D{"③ 在该 worktree 里手跑仓库的 setup 命令"}
+    R2C -->|"否"| R2E["查真实错误——不盲目重派"]
+    R2D -->|"通过——瞬时竞态，重派安全"| R2F["④ 读 recovery 参考，⑤ 先 worker-release 失败 Dispatch，⑥ 用 --retry-of 配 --task 并显式给落点重派"]
+    R2D -->|"失败"| R2E
+    R2F --> R2G["重新确认 turn 开始——ready 回执依然什么都不证明"]
+
+    E3["Orca app 运行中死掉或重启"] --> R3A["① orca status --json 确认 app 已起——在此之前不发任何编排命令"]
+    R3A --> R3B["② worker-list --include-remote --json 清点每个 Dispatch；Run、Task、终端状态由 Orca 持久化，扛得住重启"]
+    R3B --> R3C["③ 重装收件器，并逐个重确认在跑 worker 的 turn"]
+    R3B -.-> R3D["重启不构成 worker 已死的证据"]
+
+    E4["消息从 worker 出去了，coordinator 就是没收到"] --> R4A["按顺序查五个断点：唤醒、队头未 ack、身份或邮箱、消费者死亡、worker 根本没发"]
+    R4A --> R4B["三源对账：本地 --status 与 deliveries、服务端 check --all、worker-list / worker-show / worker-read"]
+    R4B --> R4C{"生命周期分支"}
+    R4C -->|"已结算但无 worker_done"| R4D["对账产物后继续验收——不要求重发，不派第二个编辑"]
+    R4C -->|"turn 结束、未结算"| R4E["确认终端仍属原 Dispatch，再发一次收据提醒"]
+    R4C -->|"liveness 无法证实或标题空闲"| R4F["这只是缺证据：不停止、不 release、不重派"]
+    R4C -->|"绑定丢失或 consumer_fenced"| R4G["停手，核对真实调用身份，绝不冒用 handle"]
+
+    E5["worker 卡在权限提示上，或 turn 始终没被确认"] --> R5A["读它请求的操作、目标路径与风险，只批准本轮已授权的操作"]
+    R5A --> R5B["额外的权限、第三方账号、付费或不可逆操作，按 §5 请人定夺"]
+    R5B -.-> R5C["Enter 从来不是万能批准，绕过模式也不是捷径"]
+
+    E6["worker 报完后出现万行级未提交改动"] --> R6A["先留证：worktree patch、index patch、untracked 清单"]
+    R6A --> R6B["逐文件比对 HEAD、index、工作区与 worker 的编辑记录"]
+    R6B --> R6C["确认并备份完每个真实改动之后才可恢复该文件——恢复由 worker 做，coordinator 负责验收"]
+    R6C -.-> R6D["本地 formatter 覆盖是确认性失败的修复，不是每个票的固定前置"]
+
+    R1A ~~~ E2
+    R2E ~~~ E3
+    R2G ~~~ E3
+    R3C ~~~ E4
+    R3D ~~~ E4
+    R4D ~~~ E5
+    R4E ~~~ E5
+    R4F ~~~ E5
+    R4G ~~~ E5
+    R5B ~~~ E6
+    R5C ~~~ E6
+
+    classDef fail fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
+    classDef step fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef ask fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
+    classDef branch fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef entry fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class R1A,R2E,R3D,R4G,R6D fail
+    class R2A,R2B,R2F,R2G,R3A,R3B,R3C,R4A,R4B,R4D,R4E,R4F,R5A,R6A,R6B,R6C step
+    class R2C,R2D,R4C branch
+    class R5B,R5C ask
+    class E1,E2,E3,E4,E5,E6 entry
+```
 
 ## 安装
 

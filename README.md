@@ -23,19 +23,6 @@ Read [README.zh-CN.md](README.zh-CN.md) for the Chinese version of this document
 The coordinator plans, communicates and accepts; workers edit, commit and open PRs. Once the gates
 pass, the coordinator merges — no per-ticket confirmation round trip.
 
-```text
-user input
-  → pin the delivery endpoint and channel
-  → hard-rule self-check (no writes on the main working copy)
-  → dispatch a worker into its own top-level worktree
-  → collect messages in the background while making progress in the foreground
-  ⇄ answer the worker (decisions go to a human; details are answered for them)
-  → gate acceptance (G-impl)
-  → send back or advance
-  → after the project PR passes G-merge: merge, sync main, tear down the worker
-  → closing report
-```
-
 The safety invariants the skill will not trade away:
 
 - **Isolation**: every worker gets a fresh top-level worktree; the coordinator never edits or
@@ -55,6 +42,208 @@ The safety invariants the skill will not trade away:
 - **Failure has a stop threshold**: bounded retries, a per-ticket breaker and a run-level breaker.
 - **Lifecycle close-out**: settled workers are released, retained or handed a follow-up Task —
   nothing is silently abandoned.
+
+## The flow, end to end
+
+Four panels, in order; together they are the whole procedure. Blue boxes are steps, orange diamonds
+are decisions, purple is a question a human has to settle, green is where a round ends or where a
+recovery procedure starts, red is a failure or a send-back, and the shaded box is a checklist that
+has to be green before the next step.
+
+### 1 · Getting a worker started (§0–§4.4)
+
+One sentence of user input becomes a worker running in its own top-level worktree. Nothing below
+this panel is reachable until the turn-start evidence exists.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    START["User asks for the work in one sentence"] --> DECL["§0 declare the round in six columns: mode / channel / intent / pre-skill absolute path / worker / delivery endpoint — no TBD"]
+    DECL --> CH{"§1 which channel does this request belong to?"}
+    CH -->|"A — explanation, status, discussion, verbal research"| ANS["Answer directly, no worker, no repository writes"]
+    ANS --> DONE_A["Nothing to dispatch and nothing to merge"]
+    CH -->|"B — bounded change, bug fix, existing spec or ticket"| SCOUT["§4.1 read-only exploration on main — the endpoint is the spec, not the edit"]
+    CH -->|"C — multi-ticket or not-yet-settled implementation"| CONV["§1 converge requirements and dependencies first: grill-with-docs, to-spec, to-tickets, then dispatch along the DAG"]
+    CONV --> PLAN8["§8 planning setup the round really needs is landed by a worker in an isolated worktree, then accepted"]
+    PLAN8 --> HARD
+    SCOUT --> HARD
+    HARD["§2 hard-rule self-check: every project-file write belongs to a worker inside its own worktree — never the main working copy, never a worker's worktree"]
+
+    HARD --> PF
+    subgraph PF["§4.0 pre-dispatch preflight — tick every line, do not dispatch until all are green"]
+        P1["The CLI is alive and the orchestration guide is already on disk"]
+        P2["Channel and ticket type are decided, and the type with its gates is a line in the spec"]
+        P3["Spec is complete: BEHAVIOR RULE plus pre-skill path, Target / Change / Constraints / Ownership / Observable acceptance"]
+        P4["Placement is explicit: new-top-level, a ticket slug, the selected agent"]
+        P5["Every baseline number was produced on this ticket's base commit"]
+        P6["An implementation spec names code-review unless §3 exempts it, with the reason written down"]
+    end
+    PF --> SETTINGS
+    SETTINGS["§0 / §4 read the live worker settings: the current default TUI agent and the disabled list"]
+    SETTINGS --> USABLE{"Selected agent recognized and not disabled?"}
+    USABLE -->|"no"| FAILSTOP["§9 report the exact error and stop; never guess or substitute a worker"]
+    USABLE -->|"yes"| DISPATCH["§4.3 worker-start --worktree new-top-level --name ticket-slug --setup run --agent the-selected-agent --json"]
+    DISPATCH --> TURN{"§4.3.1 does the receipt say turnStart: observed?"}
+    TURN -->|"yes"| LIVE
+    TURN -->|"no"| PROVE{"Evidence proves the turn really started?"}
+    PROVE -->|"yes"| LIVE
+    PROVE -->|"no"| FAILSTOP
+    LIVE["A worker is running in its own top-level worktree — panel 2 is the loop that keeps it moving"]
+
+    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef stop fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
+    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class START,DECL,HARD,P1,P2,P3,P4,P5,P6,SETTINGS,DISPATCH,SCOUT,CONV,PLAN8,LIVE phase
+    class CH,USABLE,TURN,PROVE gate
+    class FAILSTOP stop
+    class ANS,DONE_A ok
+```
+
+### 2 · The live loop (§4.5–§5)
+
+The part that is easy to get wrong: the coordinator is not polling, it is being woken — the inbox
+consumer *ending* is the wake. Handling the batch and installing the next wait are one step, and a
+question is classified before anyone answers it.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    LIVE["A worker is running — this is the loop that keeps it moving"] --> INBOX["§4.5 one inbox consumer per Run, installed as a long call the harness surfaces — never nohup — with the ledger outside the repository"]
+
+    INBOX --> LOOP["§4.5 the loop itself, and the consumer ends on a wake event — that end is the wake"]
+    LOOP --> WAKE["Wake line: a new non-heartbeat batch, a worker-state change, or the loop's own error"]
+    WAKE --> HANDLE["Handle the whole batch: check Run, Task and Dispatch, dedupe by message ID"]
+    HANDLE --> CLS{"§5 classify the message"}
+    CLS -->|"question"| HUM["Decision-class or the escalation five: attach your leaning and ask the human — the worker's recommendation is reference only"]
+    CLS -->|"question"| DET["Detail-class: the coordinator answers from the ADR, the spec or the user's own words"]
+    CLS -->|"escalation"| ESC["An escalation freezes that ticket only; the other tickets keep advancing"]
+    HUM --> REPLY["reply --id message-id"]
+    DET --> REPLY
+    ESC --> REPLY
+    REPLY --> ACKF["Acknowledge only after the whole batch is handled, using that read snapshot's deliveryId"]
+    ACKF --> REARM["Install the next wait — a wake with no new wait behind it is a silent stall"]
+    REARM --> WAKE
+    CLS -->|"worker_done"| ACCEPT["§6 gate acceptance — panel 3"]
+    INBOX --> BOUND["No wake channel in this harness? keep the turn in waits of at most 60 seconds and recover from evidence after three no-progress rounds"]
+    BOUND -.-> WAKE
+
+    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
+    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class LIVE,INBOX,LOOP,WAKE,HANDLE,DET,REPLY,ACKF,REARM,BOUND phase
+    class CLS gate
+    class HUM,ESC human
+    class ACCEPT ok
+```
+
+### 3 · Acceptance, merge and close-out (§6–§7)
+
+`worker_done` is not acceptance: the teardown check runs first, then the gate the ticket type calls
+for, and only a green gate reaches the merge. Two consecutive failures of the same gate pause the
+ticket; five send-backs pause the run.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    ACCEPT["worker_done from the loop, panel 2 — gate acceptance starts here"] --> NOISE{"§4.0.1 teardown check: git status --porcelain and diff --numstat in the worktree"}
+    NOISE -->|"tens of thousands of lines"| REFORM["Formatter reflow noise: preserve the diff as evidence, the worker recovers, send back"]
+    NOISE -->|"normal uncommitted change"| WHY["Ask the worker why work is uncommitted — do not accept it by default"]
+    NOISE -->|"clean"| PROP["§3 / §6 depth: a bounded single ticket runs the affected tests, a shared interface or an unclear radius runs the full suite; a skipped two-axis review needs its reason in the spec and the Answer"]
+    REFORM --> SEND
+    WHY --> SEND
+    PROP --> GATES["§6 pick the gate by ticket type: research sources / G-docs / G-wayfinder / G-spec / G-tickets / G-impl"]
+    GATES --> GREEN{"Gate green on observable results and evidence?"}
+    GREEN -->|"no"| SEND["Send back: which gate failed, what evidence is missing, exactly what to add"]
+    SEND --> BREAK{"Same gate failed twice on one ticket, or five send-backs across the run?"}
+    BREAK -->|"yes"| STOP9["§9 stop dispatching and bring the human the state and the evidence"]
+    BREAK -->|"no"| RECYCLE["Follow-up Task, or the original worktree selector for a reused terminal, and the new turn re-runs §4.3.1 — back to the loop in panel 2"]
+    GREEN -->|"yes"| MERGE["§6.5 G-merge: for several PRs an integration worker composes the final heads in the intended merge order and the combined result is checked first"]
+    MERGE --> EXC{"Did the user explicitly ask to keep the PR unmerged — asking for a PR is not that — or did a rule or a gate block it?"}
+    EXC -->|"yes"| KEEP["Keep the PR, report the real state, and stop here"]
+    EXC -->|"no"| SYNC["Merge in DAG or stacked order, then §6.5.1 pull the merged main only on a clean working copy and verify with merge-base --is-ancestor"]
+    KEEP --> REPORT
+    SYNC --> LIFE["§6.5 worker lifecycle: follow-up, retain or release, then query reclaimable and settle every item"]
+    LIFE --> REPORT["§7 closing report in a durable directory outside the repository: artifacts with merge SHAs, acceptance evidence, human decisions, leftovers, lifecycle count"]
+    REPORT --> DONE_B["§7 stop at the agreed delivery endpoint — normally the merged project change"]
+
+    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
+    classDef stop fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
+    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class ACCEPT,NOISE,WHY,PROP,GATES,MERGE,SYNC,LIFE,REPORT phase
+    class GREEN,BREAK,EXC gate
+    class STOP9 human
+    class REFORM,SEND,KEEP,RECYCLE stop
+    class DONE_B ok
+```
+
+### 4 · Failure branches (§9)
+
+Failure is not one node: each entry point has its own procedure, and all of them share one shape —
+gather evidence first, report the exact error, and never relaunch unconditionally.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
+flowchart TD
+    E1["The CLI will not start, or the orchestration guide cannot be fetched"] --> R1A["Report the exact error and stop — do not swap the executable, do not guess commands"]
+
+    E2["worker-start returns state: failed"] --> R2A["① Read the receipt's four fields: failedStage / lastError / recovery / residualResources"]
+    R2A --> R2B["② Three read-only commands: terminal show, git worktree list, terminal read"]
+    R2B --> R2C{"Terminals present, worktree present, setup exited with zero output?"}
+    R2C -->|"yes — the readiness check raced, not your ticket"| R2D{"③ Run the repository's setup command by hand in that worktree"}
+    R2C -->|"no"| R2E["Investigate the real error — do not re-dispatch blindly"]
+    R2D -->|"passes — transient, a re-dispatch is safe"| R2F["④ Read the recovery reference, ⑤ release the failed Dispatch first, ⑥ re-dispatch with --retry-of and --task plus an explicit placement"]
+    R2D -->|"fails"| R2E
+    R2F --> R2G["Confirm the turn started again — a ready receipt still proves nothing"]
+
+    E3["The Orca app died or restarted mid-run"] --> R3A["① orca status --json confirms the app is up — no orchestration command is sent before that"]
+    R3A --> R3B["② worker-list --include-remote --json inventories every Dispatch; Run, Task and terminal state survive the restart"]
+    R3B --> R3C["③ Restart the inbox consumer and re-confirm each running worker's turn"]
+    R3B -.-> R3D["A restart is not evidence that a worker is dead"]
+
+    E4["A message left the worker and the coordinator never saw it"] --> R4A["Check the five break points in order: wakeup, unacked FIFO head, identity or mailbox, dead consumer, the worker never sent"]
+    R4A --> R4B["Reconcile all three sources: local --status plus deliveries, server check --all, worker-list / worker-show / worker-read"]
+    R4B --> R4C{"Lifecycle branch"}
+    R4C -->|"settled, no worker_done"| R4D["Reconcile against the artifacts and continue acceptance — never ask for a resend, never dispatch a second editor"]
+    R4C -->|"turn ended, not settled"| R4E["Confirm the terminal still belongs to the original Dispatch, then send one finish-the-receipt instruction"]
+    R4C -->|"liveness unverifiable or an idle title"| R4F["That is missing evidence only: do not stop, do not release, do not re-dispatch"]
+    R4C -->|"binding lost or consumer_fenced"| R4G["Stop operating on that identity, verify the real caller, never impersonate a handle"]
+
+    E5["A worker sits on a permission prompt, or its turn was never confirmed"] --> R5A["Read the requested operation, the target path and the risk, and approve only what this round authorized"]
+    R5A --> R5B["Extra permission, a third-party account, payment or an irreversible operation means asking the human per §5"]
+    R5B -.-> R5C["Enter is never a universal approval, and a bypass mode is not a shortcut"]
+
+    E6["Tens of thousands of uncommitted lines after a worker finishes"] --> R6A["Preserve the evidence first: the worktree patch, the index patch, the untracked list"]
+    R6A --> R6B["Compare HEAD, the index, the working tree and the worker's edit record file by file"]
+    R6B --> R6C["Only after every real change is confirmed and backed up may that file be restored — the worker does the recovery, the coordinator checks it"]
+    R6C -.-> R6D["A local formatter override repairs a confirmed failure; it is never a blanket pre-step"]
+
+    R1A ~~~ E2
+    R2E ~~~ E3
+    R2G ~~~ E3
+    R3C ~~~ E4
+    R3D ~~~ E4
+    R4D ~~~ E5
+    R4E ~~~ E5
+    R4F ~~~ E5
+    R4G ~~~ E5
+    R5B ~~~ E6
+    R5C ~~~ E6
+
+    classDef fail fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
+    classDef step fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
+    classDef ask fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
+    classDef branch fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
+    classDef entry fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
+    class R1A,R2E,R3D,R4G,R6D fail
+    class R2A,R2B,R2F,R2G,R3A,R3B,R3C,R4A,R4B,R4D,R4E,R4F,R5A,R6A,R6B,R6C step
+    class R2C,R2D,R4C branch
+    class R5B,R5C ask
+    class E1,E2,E3,E4,E5,E6 entry
+```
 
 ## Install
 
