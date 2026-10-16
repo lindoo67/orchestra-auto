@@ -10,14 +10,19 @@ profile (for example, read `result.settingsPath` from `orca agent hooks status -
 to `SETTINGS_PATH`; its parent directory is `PROFILE_DIR`). Use that path only to locate the profile;
 **do not read agent settings from `orca-data.json`**.
 
-Read the settings from `profile-state.db` in that profile directory. In the current schema, settings
+Read the settings from the profile's **live state database** — the one SQLite file in that directory
+that is not a retained backup. Recovery snapshots also end in `.db`, so select the database instead of
+naming it, and never pass several files to `sqlite3`: zero or several candidates means stop and report
+rather than guess, and a backup would answer with stale settings. In the current schema, settings
 are stored as JSON in the `payload` column of the `profile_state_documents` row where
 `domain = 'settings'`. The top-level `defaultTuiAgent` and `disabledTuiAgents` fields hold the default
 TUI agent and disabled-agent list. For example:
 
 ```bash
 PROFILE_DIR="$(dirname "$SETTINGS_PATH")"
-sqlite3 -readonly "$PROFILE_DIR/profile-state.db" \
+STATE_DB="$(find "$PROFILE_DIR" -maxdepth 1 -name '*.db' ! -name '*.backup.*')"
+[ "$(printf '%s\n' "$STATE_DB" | grep -c .)" = "1" ] || { echo "expected exactly one profile state database"; exit 1; }
+sqlite3 -readonly "$STATE_DB" \
   "SELECT json_object(
      'defaultTuiAgent', json_extract(payload, '$.defaultTuiAgent'),
      'disabledTuiAgents', json_extract(payload, '$.disabledTuiAgents')
