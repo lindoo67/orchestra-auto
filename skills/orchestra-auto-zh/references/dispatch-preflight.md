@@ -8,13 +8,17 @@
 `result.settingsPath` 并赋给 `SETTINGS_PATH`，其文件所在目录作为 `PROFILE_DIR`）；该路径只用于定位 profile，
 **不要从 `orca-data.json` 读取 agent 设置**。
 
-从该 profile 目录下的 `profile-state.db` 只读查询设置。当前 schema 将设置保存在
+从该 profile 目录下**活动的状态数据库**只读查询设置——即该目录里唯一不是保留备份的那个 SQLite 文件。
+恢复快照同样以 `.db` 结尾，所以要「选」而不是「按名写死」，且绝不把多个文件一起交给 `sqlite3`：
+候选为 0 个或多个时停止并报告，不要猜；读到备份只会得到过期设置。当前 schema 将设置保存在
 `profile_state_documents` 表中 `domain = 'settings'` 的 `payload` JSON，默认 TUI agent 和禁用列表分别是
 payload 顶层的 `defaultTuiAgent` 与 `disabledTuiAgents`。例如：
 
 ```bash
 PROFILE_DIR="$(dirname "$SETTINGS_PATH")"
-sqlite3 -readonly "$PROFILE_DIR/profile-state.db" \
+STATE_DB="$(find "$PROFILE_DIR" -maxdepth 1 -name '*.db' ! -name '*.backup.*')"
+[ "$(printf '%s\n' "$STATE_DB" | grep -c .)" = "1" ] || { echo "expected exactly one profile state database"; exit 1; }
+sqlite3 -readonly "$STATE_DB" \
   "SELECT json_object(
      'defaultTuiAgent', json_extract(payload, '$.defaultTuiAgent'),
      'disabledTuiAgents', json_extract(payload, '$.disabledTuiAgents')
