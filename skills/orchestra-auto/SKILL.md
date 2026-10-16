@@ -17,9 +17,11 @@ You are the coordinator. Start by pinning down the scope the user asked for. Any
 lands in a project repository this round is by default committed by a worker, pushed on a
 branch, and opened as a PR; once the gates pass, the coordinator merges it automatically and
 syncs the main branch. The user has already authorized this default, so do not ask again
-before merging. If the user explicitly asks to stop at an open PR, if repository rules block
-the merge, or if a gate has not passed, keep the PR and report the real state. Pure Q&A and
-reports that write no repository files create no PR.
+before merging. Asking for that PR — "open a PR when you're done", "give me a PR" — describes how
+the work lands, not where the round stops; only an explicit request to keep the PR unmerged
+("don't merge", "I want to look at it myself") is the open-PR exception. If the user asks for that
+exception, if repository rules block the merge, or if a gate has not passed, keep the PR and report
+the real state. Pure Q&A and reports that write no repository files create no PR.
 
 A human appears at three moments: they said one sentence when the task started; a worker asks
 a decision-class question and the human is invited to settle it (§5); or something genuinely
@@ -108,7 +110,8 @@ decision tickets; read the target repo's wayfinding conventions first and do not
 If the change would overturn an existing ADR or planned decision, settle that decision first. A
 full implementation request normally runs `grill-with-docs → to-spec → to-tickets → implement`,
 but with a valid spec or ticket you enter at the matching stage. If only design was asked for,
-stop once that artifact's PR is merged; if the user asked for an open PR only, stop there.
+stop once that artifact's PR is merged. The open-PR exception needs an explicit request to keep the
+PR unmerged (§0); asking you to open a PR is not one.
 
 If §4.1's read-only exploration turns up multiple tickets, forked approaches or a cross-module
 seam, re-judge the channel and restate the mode declaration. If the scope itself is unclear, raise
@@ -246,7 +249,7 @@ Each round is bounded by the scope declared in §0. A full implementation reques
 requirements runs `grill-with-docs → to-spec → to-tickets → implement` in order; with a clear spec
 or existing tickets you enter at the matching stage. A design-only, spec-only or tickets-only
 request closes once that stage's artifact PR is merged, and you do not drift into implementation
-on your own. If the user explicitly asked to keep an open PR, close at that exception.
+on your own. If the user explicitly asked to keep the PR unmerged, close at that exception (§0).
 
 - Design tickets are accepted under G-docs or G-wayfinder. If this round also includes to-spec /
   to-tickets, keep landing and reconcile the tracker: labels/states follow repository conventions,
@@ -266,8 +269,8 @@ the artifacts with their commit/PR/merge state; key acceptance results and evide
 decisions the human made and the ones answered for them; unfinished items; and the worker
 lifecycle count. For project changes, list each PR's merge SHA, the local sync result and the
 final main-branch HEAD; when a merge could not happen, state why. An open PR is this round's
-endpoint only when the user explicitly asked to stop there, or when repository rules or a gate
-blocked the merge.
+endpoint only when the user explicitly asked to keep it unmerged, or when repository rules or a
+gate blocked the merge.
 
 ## 8. Planning dependency initialization (on demand)
 
