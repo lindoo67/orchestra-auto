@@ -142,9 +142,14 @@ The wake line (stdout, exactly one line):
 | `saved` | the file the batch was written to *before* the wake; `null` otherwise |
 | `detail` | one line naming the reason; for `error`, the error text, flattened and truncated |
 
-Exit codes: `0` a wake; `1` a fatal error — itself a wake, with the same line at `reason=error`
-plus `watch.log` and `state.json phase=error`; `2` usage, an already-running loop, or a refused
-rebinding. Outside `--status`, stdout carries that line and nothing else.
+Exit codes: `0` a wake; `1` a fatal error of the running loop — itself a wake, with the same line at
+`reason=error` plus `watch.log` and `state.json phase=error`; `2` the installation was refused
+before the loop started — another instance already holds this state directory, or the directory is
+bound to a different Run/terminal/CLI (both print the same `reason=error` line and an `ERROR` line in
+`watch.log`, and neither touches the `state.json` of the loop that owns the directory) — or the
+arguments were a usage error, the one path that prints nothing on stdout and says so on stderr
+instead, because the loop never started and there is no state directory to report to. Everywhere
+else, outside `--status`, stdout carries that line and nothing else.
 
 All three legs wake, and each one exists because the others cannot see it:
 

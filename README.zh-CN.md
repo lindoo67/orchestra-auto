@@ -137,7 +137,7 @@ python3 -m unittest discover -s tests -v
   eval JSON 的形状与唯一性、`eval.yaml` 白名单、Python 的 `py_compile`、shell wrapper 的
   `bash -n`、MIT 许可，以及脱敏扫描。
 
-已记录结果为 **77 OK（1 skipped）**。这是主要的结构与行为门禁。
+已记录结果为 **78 OK（1 skipped）**。这是主要的结构与行为门禁。
 
 想单独跑某一条也可以：
 
@@ -195,8 +195,8 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 
 ## 评估集
 
-每个语言变体都带一份 `evals/evals.json`，19 个提示词层面的场景，覆盖通道判定、worker 栏取值、
-启动确认、门禁选择、review 安排、打回判断、决策分类、升级与合并例外。
+每个语言变体都带一份 `evals/evals.json`，20 个提示词层面的场景，覆盖通道判定、worker 栏取值、
+启动确认、门禁选择、review 安排、打回判断、决策分类、升级、合并例外，以及「先唤醒、再重装」的契约。
 
 这些是**场景检查，不是端到端证明**：它们看的是一个读过本 skill 的 agent 是否按 skill 的意图推理，
 并不证明编排在真实 Orca 主机上能跑通——那是脚本行为测试和真实使用的事。每份文件都在 `_note`

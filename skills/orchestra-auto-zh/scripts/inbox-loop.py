@@ -147,6 +147,12 @@ def parse_cli_result(code, raw, problem):
         data = json.loads(raw)
     except ValueError as invalid:
         raise RuntimeError(f"CLI exit=0 with unparsable JSON: {raw[:1000]} {problem[-1000:]}") from invalid
+    if not isinstance(data, dict):
+        # An envelope that is not even an object (a bare list, a number, a string) is the
+        # same class of failure as a missing ``ok``: it has to reach the fatal path, which
+        # is a wake with evidence, instead of escaping as an AttributeError that leaves no
+        # wake line and no ``state.json phase=error`` behind.
+        raise RuntimeError(f"CLI exit=0 without a JSON object: {raw[:1000]} {problem[-1000:]}")
     if data.get("ok") is not True or not isinstance(data.get("result"), dict):
         raise RuntimeError(f"CLI exit=0 without an ok result: {raw[:1000]} {problem[-1000:]}")
     return data
@@ -471,7 +477,9 @@ def main():
         log(directory, f"ERROR already running; refused to take over run={run_id} "
                        f"terminal={terminal}")
         emit(wake_event("error", run_id, terminal, "another loop holds this state directory"))
-        return 1
+        # 2, not 1: this is a refusal before the loop ever started, the same class as a
+        # refused rebinding or a usage error — not a failure of a running loop.
+        return 2
     binding = {"run": run_id, "terminal": terminal, "cli": CLI}
     previous = read_json(directory / "binding.json")
     if previous and previous != binding:

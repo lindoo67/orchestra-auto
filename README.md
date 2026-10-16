@@ -156,7 +156,7 @@ python3 -m unittest discover -s tests -v
   the `eval.yaml` allowlist, `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT
   licence, and the leak scan.
 
-The recorded result is **77 OK (1 skipped)**. This is the primary structural and behavioral gate.
+The recorded result is **78 OK (1 skipped)**. This is the primary structural and behavioral gate.
 
 Individual check commands, if you want them directly:
 
@@ -222,9 +222,10 @@ Two manual checks belong beside it, and neither can be automated from inside the
 
 ## Evals
 
-Each language variant ships an `evals/evals.json` with 19 prompt-level scenarios covering channel
+Each language variant ships an `evals/evals.json` with 20 prompt-level scenarios covering channel
 routing, worker-slot resolution, start verification, gate choice, review arrangement, send-back
-judgement, decision classification, escalation and the merge exceptions.
+judgement, decision classification, escalation, the merge exceptions and the wake-then-reinstall
+contract.
 
 These are **scenario checks, not end-to-end proof**: they show whether an agent that has read the
 skill reasons the way the skill intends. They do not prove that orchestration works against a live

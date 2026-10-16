@@ -61,6 +61,11 @@ if argv[:2] == ["orchestration", "worker-list"]:
         out.write(str(index + 1))
     index = min(index, len(WORKERS) - 1)
     entry = WORKERS[index]
+    if isinstance(entry, str):
+        # A raw envelope, printed verbatim: how a CLI that answers with something that is
+        # not a JSON object at all is exercised.
+        sys.stdout.write(entry)
+        sys.exit(0)
     if isinstance(entry, dict) and "fail" in entry:
         sys.stderr.write(entry["fail"])
         sys.exit(1)
@@ -134,7 +139,8 @@ class FakeOrca:
     has something to read. ``--ack`` calls are recorded and answered without advancing.
 
     ``worker_states`` is the scripted sequence of ``worker-list`` row lists, consumed the
-    same way; an entry may again be ``{"fail": "reason"}``. With ``keepalive`` set, a
+    same way; an entry may again be ``{"fail": "reason"}``, or a raw string that is printed
+    verbatim so a malformed envelope can be exercised. With ``keepalive`` set, a
     ``--wait`` emits keepalive lines on stderr exactly as the real CLI does.
     """
 
@@ -544,6 +550,20 @@ class WorkerStateTests(InboxLoopCase):
         state = json.loads((self.state / "state.json").read_text())
         self.assertEqual(state["phase"], "error")
 
+    def test_non_object_envelope_reaches_the_error_wake(self):
+        """A CLI answering with a bare list must wake the error leg, not escape uncaught.
+
+        An AttributeError would leave no wake line and no ``state.json phase=error``: exactly
+        the two things that tell "the loop died loudly" from "the loop vanished".
+        """
+        process, _ = self.start([batch("empty", [])], worker_states=["[]"])
+        payload = self.wake(process, expect=1)
+        self.assertEqual(payload["reason"], "error")
+        self.assertIn("without a JSON object", payload["detail"])
+        state = json.loads((self.state / "state.json").read_text())
+        self.assertEqual(state["phase"], "error")
+        self.assertIn("ERROR", (self.state / "watch.log").read_text())
+
 
 class FailureReportingTests(InboxLoopCase):
     def test_cli_error_is_reported_and_exits_nonzero(self):
@@ -670,7 +690,7 @@ class SingleInstanceTests(InboxLoopCase):
                  "run_test", str(self.state), "term_coordinator"],
                 env=env, capture_output=True, text=True, timeout=20,
             )
-            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.returncode, 2)
             self.assertIn("already running", result.stderr)
             self.assertEqual(json.loads(result.stdout)["reason"], "error")
         finally:
