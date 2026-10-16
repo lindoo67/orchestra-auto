@@ -61,6 +61,13 @@ exited on purpose, and `state.json` then carries `phase=wake`, the reason and th
 must investigate before restarting. Do not auto-restart until the binding, permission or waiter
 issue is resolved, and do not kill another Run's process.
 
+**Never judge liveness by the pid file alone.** The consumer removes `inbox-loop.pid` as it exits,
+so "no pid file" and "the pid in the file no longer exists" both mean dead, and only `state.json`
+says *why* it died: `phase=error` with the error text, or `phase=wake` with the wake reason. An
+external waiter that polled pid-file liveness alone already missed one real death this way — the
+file had been unlinked by the consumer on its way out, so the waiter read "nothing to check" as
+"still fine" and stayed asleep.
+
 Each cycle the script first checks without a filter and then installs a blocking wait, so
 heartbeats and ordinary messages cannot pile up at the head of the queue. A complete response is
 written atomically to `deliveries/*.json`, hashed by deliveryId; files are never rotated away. A
@@ -147,7 +154,14 @@ All three legs wake, and each one exists because the others cannot see it:
    duty, not news, so handle it from the ledger.
 2. **The loop's own death or error** — a non-zero exit is a wake by itself, because the process
    ending is what the harness surfaces; the `reason=error` line says why. A consumer that stops
-   silently is the "total silence" case in §5.1, not an empty queue.
+   silently is the "total silence" case in §5.1, not an empty queue. One real case, from the
+   field: the Orca app restarts while the consumer is blocked in `check --wait`, and the CLI
+   answers `runtime_unavailable` ("The Orca runtime closed the connection before responding…",
+   with a `request-show --request <id>` pointer). The consumer writes `phase=error`, exits
+   non-zero and prints `reason=error`; nothing is lost, because the queued Deliveries are still on
+   the server and come back on the next install. **Never turn an error exit into a normal one to
+   satisfy this wake contract**: the exit is the wake, and an exit that swallows the failure hides
+   exactly the incident you need to look at.
 3. **Worker settlement state** — every `WORKER_POLL_SECONDS` (default 15 s) the loop reads the
    read-only `worker-list --run <run_id> --json` and reduces this Run's workers to a signature of
    `dispatchId:workerState:dispatchStatus:stage`. When the signature no longer matches the one
@@ -247,7 +261,7 @@ order; the first two account for nearly every case.
 | Wakeup | A `worker_done` is already on disk or in the queue, yet the coordinator's turn ended long ago and nothing started a new one: delivery files newer than your last turn, or a stale `NEW-MESSAGE`, with no confirmed wake method from §3 | A successful `send` proves a durable enqueue only; wake and nudge are best-effort. Confirm which §3 branch you have. With a harness that surfaces job completion, the end of the consumer — the wake line in §3.1 — **is** the wake; if it never arrived, check that the consumer was installed as §3.2 describes and not via `nohup`, and that its next wait was installed after the previous wake (§3.4). Without such a harness, stay in the bounded tier of §3.3 or record the un-wakeable state before yielding. Never read "the loop is alive" as "I will be woken" |
 | Unacked FIFO head | Earlier messages were fine, later `worker_done` messages never appear, and an unanswered question or decision sits at the head of the batch | `check` returns the bound Run's **oldest unacknowledged** Delivery and replays that exact batch until `--ack`, so one unacked batch hides everything behind it. Handle the whole batch, then ack that snapshot's `deliveryId` (§2 step 3). While a human decision blocks the head, read later messages with the read-only `check --all` (§2 step 4); `--all` never yields an ackable ID. An ack is not a reply |
 | Identity or mailbox | Nothing arrives at any inbox, or messages land where you are not looking | `check` names its caller with `--terminal <handle>` and rejects `--from`; a handle taken from a terminal title, from "the most recent terminal", or from another session or Run addresses the wrong mailbox. Take handles from the real calling identity (`orca status --json`) and keep them in the ledger. A `worker_done` or heartbeat cannot target a group, and its sender handle must equal the Dispatch assignee exactly or the task never settles |
-| Dead consumer | Total silence, heartbeats included: `--status` reports DEAD with `phase=error` or an `ERROR` line in `watch.log`; or the wake line arrived with `reason=error` | The script writes CLI failures, JSON errors and lost bindings to disk and exits non-zero on purpose, so a stop is never an empty queue — and that stop is itself a wake (§3.1). Read the `ERROR` line and the `detail`; a binding/waiter problem usually means another instance or another Run's loop took the slot. Waiter slots are a cross-directory resource: before starting a new loop, confirm and stop the old one, and never migrate an old state directory |
+| Dead consumer | Total silence, heartbeats included: `--status` reports DEAD with `phase=error` or an `ERROR` line in `watch.log`; or the wake line arrived with `reason=error` | The script writes CLI failures, JSON errors and lost bindings to disk and exits non-zero on purpose, so a stop is never an empty queue — and that stop is itself a wake (§3.1). Judge death from `state.json`, never from the pid file alone (§1). Read the `ERROR` line and the `detail`; a binding/waiter problem usually means another instance or another Run's loop took the slot. Before re-issuing anything, follow the CLI's own recovery guidance when it printed one: a `runtime_unavailable` error carries a `request-show --request <id>` pointer, and the mutation may already have taken effect, so establish that with `request-show` and replay it with `--retry-request <id>` rather than treating it as a fresh attempt. The consumer never retries by itself. Waiter slots are a cross-directory resource: before starting a new loop, confirm and stop the old one, and never migrate an old state directory |
 | Worker never sent | Only heartbeats arrive, or a plain final that claims success does; an auto-acked heartbeat-only batch looks like traffic while reporting nothing | Write the §4 contract into the spec, and classify with 5.3 |
 
 ### 5.2 Reconcile all three sources, never one

@@ -561,6 +561,25 @@ class FailureReportingTests(InboxLoopCase):
         self.assertIn("ERROR", log)
         self.assertIn("simulated CLI failure", log)
 
+    def test_status_reports_the_reason_after_a_fatal_exit(self):
+        """A dead consumer must be readable from state.json, not from the pid file alone.
+
+        The pid file is unlinked on the way out, so "no pid file" is a death like any other and
+        the only place that says why is the state the loop wrote before exiting.
+        """
+        process, _ = self.start([{"fail": "simulated CLI failure"}])
+        self.wake(process, expect=1)
+        self.wait_for(lambda: not (self.state / "inbox-loop.pid").exists(),
+                      what="the pid file to be removed on exit")
+        result = subprocess.run(
+            [sys.executable, str(self.skill_dir / self.script), "--status", str(self.state)],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("loop: DEAD", result.stdout)
+        self.assertIn('"phase": "error"', result.stdout)
+        self.assertIn("simulated CLI failure", result.stdout)
+
     def test_nonempty_batch_without_delivery_id_is_an_error(self):
         """A batch with messages but no deliveryId cannot be acknowledged safely."""
         process, _ = self.start([
