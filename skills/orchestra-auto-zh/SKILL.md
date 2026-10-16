@@ -40,7 +40,7 @@ description: >-
 | `references/spec-contract.md` | 给 worker 写 spec 时，任何通道、任何票型 |
 | `references/reply-protocol.md` | 对 worker 提问分类或应答，或判断升级问人还是代答时 |
 | `references/gate-acceptance.md` | 票据收尾、要选门禁时；合并项目 PR 或结算 worker 时 |
-| `references/inbox-and-waiting.md` | 每个 Run 首次派活前（身份绑定、收件器、唤醒与失联）；后续派活只需核对收件器仍有效 |
+| `references/inbox-and-waiting.md` | 每个 Run 首次派活前（身份绑定、收件器、唤醒与失联）；后续派活只需核对收件器仍有效；worker 的消息收不到时 |
 | `references/worker-start-and-recovery.md` | `turnStart` 未确认、权限提示或 worker 失联 |
 | `references/gates-docs-planning.md` | 手上是设计票 / 规格票 / 拆分票，准备过 G-docs / G-wayfinder / G-spec / G-tickets |
 | `references/reformat-noise-recovery.md` | §4.0.1 检出万行级未提交改动（格式化重排噪声） |

@@ -88,6 +88,33 @@ liveness.reason，并对相关 Dispatch 读取 worker-show/worker-read。检查�
 
 ## 5. 缺完成报告与失联恢复
 
+### 5.1 消息已发出，协调者却看不到
+
+「它发的东西到我这儿毫无反应」通常断在五处之一。按顺序核；前两条覆盖绝大多数情况。
+
+| 断点 | 症状与一眼判据 | 动作 |
+| --- | --- | --- |
+| 唤醒 | worker_done 已在盘上或队列里，但协调者的 turn 早已结束、没有东西起新 turn：delivery 文件比你上一次 turn 更新，或 `NEW-MESSAGE` 早已过期，而 §3 的唤醒方式从未被确认 | `send` 只证明 durable enqueue；wake/nudge 是 best-effort，`scripts/inbox-loop.py` 从不叫醒 agent。`nohup` 加一个活着的收件进程不是唤醒。停在 §3 适用的那一档：有已确认通知时，阻塞 `check --wait` 的返回**就是**唤醒（它接受较长的 `--timeout-ms`，每 15 秒打印一次 keepalive）；没有通知时保持 turn 有界等待，或在结束 turn 前记录无法自动唤醒的状态 |
+| FIFO 头部未 ack | 早先消息正常，之后的 worker_done 再不出现，批次头部压着一条未回答的提问或决策 | `check` 返回 Run 下**最老未 ack** 的 Delivery，并一直重放这一批直到 `--ack`，所以一批没 ack 就挡住它后面的一切。整批处理完再 ack 该快照的 `deliveryId`（§2 第 3 条）。人类决策堵住头部时，用只读 `check --all` 读后续消息（§2 第 4 条）；`--all` 从不出产可 ack 的 ID。ack 不是回复 |
+| 身份/邮箱 | 哪个收件箱都收不到，或消息落在你没在看的地方 | `check` 用 `--terminal <handle>` 认调用方且不接受 `--from`；从终端标题、"最新终端"或别的会话/Run 拿来的 handle 指向错误邮箱。handle 取自真实调用方身份（`orca status --json`）并写入台账。worker_done/heartbeat 不能发组地址，其 sender handle 必须精确等于 dispatch assignee，否则该任务永不结算 |
+| 收件器已死 | 彻底安静（连心跳也没有）：`--status` 报 DEAD 或 `phase=error`，或 `watch.log` 有 `ERROR` 行 | 脚本刻意把 CLI 失败、JSON 错误与绑定丢失落盘并非零退出，一次停止从不等价于空队列。waiter 槽是跨目录资源：app 重启、第二个实例或别的 Run 的 loop 都可能占走你需要的槽。起新 loop 前先确认并停掉旧 loop，绝不迁移旧状态目录 |
+| worker 压根没发 | 只收到心跳，或收到声称成功的 plain final；被自动 ack 的纯心跳批次看着有流量，实际什么也没报 | 把 §4 的通信契约写进 spec，并按 5.3 分类 |
+
+### 5.2 三处同查，不能只看一处
+
+报告缺失或 worker 像失联时，把这三处一起读；任何单独一处都可能显得空，或在并不健康时显得健康：
+
+1. **本地**：`--status` 看 `loop`/`phase`；枚举**全部** `deliveries/*.json`，而不是只信
+   `NEW-MESSAGE`（它只提示最近落盘的批次，不是待办清单）；读 `watch.log` 的 `ERROR` 行。
+2. **服务端队列**：只读 `check --run <run_id> --terminal <handle> --all --json`。
+3. **worker 状态**：`worker-list --include-remote --json`（有分页须读完），再对相关 Dispatch
+   读 `worker-show` 与 `worker-read`——`projection.attention.requiresAction`、字面
+   `projection.nextAction`、`liveness.reason`。
+
+按 5.3 分类。不能只盯 `NEW-MESSAGE`，也不能只等 `worker_done`。
+
+### 5.3 生命周期分支
+
 | 观察 | 动作 |
 | --- | --- |
 | Dispatch 已结算，收件箱没 worker_done | 用 `check --all`、真实结算状态及产物对账，补记录并继续验收；不要求重发、不另派重复编辑者 |
