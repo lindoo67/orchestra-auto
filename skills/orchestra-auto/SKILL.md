@@ -51,7 +51,7 @@ constraints. Each reference states its own trigger in its opening lines:
 | `references/spec-contract.md` | When writing a worker's spec, on any channel and for any ticket type |
 | `references/reply-protocol.md` | When classifying or answering a worker question, or deciding whether to escalate vs auto-answer |
 | `references/gate-acceptance.md` | When a ticket closes and you pick a gate; when merging a project PR or settling a worker |
-| `references/inbox-and-waiting.md` | Before each Run's first dispatch (identity binding, inbox, wakeups, lost-contact recovery); later dispatches only verify the inbox is still active |
+| `references/inbox-and-waiting.md` | Before each Run's first dispatch (identity binding, inbox, wakeups, lost-contact recovery); later dispatches only verify the inbox is still active; also when a worker's message never shows up |
 | `references/worker-start-and-recovery.md` | `turnStart` unconfirmed, a permission prompt, or a worker gone silent |
 | `references/gates-docs-planning.md` | This ticket is a design / spec / ticket-splitting ticket heading for G-docs / G-wayfinder / G-spec / G-tickets |
 | `references/reformat-noise-recovery.md` | §4.0.1 finds tens of thousands of lines of uncommitted change (formatter reflow noise) |

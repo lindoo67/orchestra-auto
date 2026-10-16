@@ -124,6 +124,37 @@ These requirements must be written into the §4.4 spec; a worker never sees this
 
 ## 5. Missing completion reports and lost contact
 
+### 5.1 The message left the worker and the coordinator never saw it
+
+"Whatever it sends me reaches nothing" usually breaks in one of five places. Check them in this
+order; the first two account for nearly every case.
+
+| Break | Symptom and one-line evidence | Action |
+| --- | --- | --- |
+| Wakeup | A `worker_done` is already on disk or in the queue, yet the coordinator's turn ended long ago and nothing started a new one: delivery files newer than your last turn, or a stale `NEW-MESSAGE`, with no confirmed wake method from §3 | `send` proves a durable enqueue only; wake and nudge are best-effort, and `scripts/inbox-loop.py` never wakes the agent. `nohup` plus a live consumer process is not a wake. Stay in whichever §3 branch applies: with a confirmed notification, the return of a blocking `check --wait` **is** the wake (it accepts a long `--timeout-ms` and prints a keepalive every 15 seconds); without one, keep the turn in bounded waits or record the un-wakeable state before yielding |
+| Unacked FIFO head | Earlier messages were fine, later `worker_done` messages never appear, and an unanswered question or decision sits at the head of the batch | `check` returns the bound Run's **oldest unacknowledged** Delivery and replays that exact batch until `--ack`, so one unacked batch hides everything behind it. Handle the whole batch, then ack that snapshot's `deliveryId` (§2 step 3). While a human decision blocks the head, read later messages with the read-only `check --all` (§2 step 4); `--all` never yields an ackable ID. An ack is not a reply |
+| Identity or mailbox | Nothing arrives at any inbox, or messages land where you are not looking | `check` names its caller with `--terminal <handle>` and rejects `--from`; a handle taken from a terminal title, from "the most recent terminal", or from another session or Run addresses the wrong mailbox. Take handles from the real calling identity (`orca status --json`) and keep them in the ledger. A `worker_done` or heartbeat cannot target a group, and its sender handle must equal the Dispatch assignee exactly or the task never settles |
+| Dead consumer | Total silence, heartbeats included: `--status` reports DEAD or `phase=error`, or `watch.log` has an `ERROR` line | The script writes CLI failures, JSON errors and lost bindings to disk and exits non-zero on purpose, so a stop is never an empty queue. Waiter slots are a cross-directory resource: an app restart, a second instance or another Run's loop can take the slot you needed. Before starting a new loop, confirm and stop the old one, and never migrate an old state directory |
+| Worker never sent | Only heartbeats arrive, or a plain final that claims success does; an auto-acked heartbeat-only batch looks like traffic while reporting nothing | Write the §4 contract into the spec, and classify with 5.3 |
+
+### 5.2 Reconcile all three sources, never one
+
+When a report is missing or a worker looks gone, read these together; each one on its own can look
+empty, or healthy when it is not:
+
+1. **Local**: `--status` for `loop`/`phase`; enumerate **every** `deliveries/*.json` instead of
+   trusting `NEW-MESSAGE`, which hints at the newest saved batch and is not a to-do list; read the
+   `ERROR` lines in `watch.log`.
+2. **Server queue**: the read-only `check --run <run_id> --terminal <handle> --all --json`.
+3. **Worker state**: `worker-list --include-remote --json` (read every page), then `worker-show`
+   and `worker-read` for the Dispatches in question — `projection.attention.requiresAction`, the
+   literal `projection.nextAction`, and `liveness.reason`.
+
+Classify the result with 5.3. Do not stare only at `NEW-MESSAGE`, and do not wait only for a
+`worker_done`.
+
+### 5.3 Lifecycle branches
+
 | Observation | Action |
 | --- | --- |
 | Dispatch settled, no worker_done in the inbox | Reconcile with `check --all`, the real settlement state and the artifacts; record it and continue acceptance. Do not ask for a resend and do not dispatch a duplicate editor |
