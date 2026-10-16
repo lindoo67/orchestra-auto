@@ -6,6 +6,24 @@ active. Command semantics follow this round's `orca skills get orchestration` an
 uses `<ORCA>` for the executable chosen this round; the script receives that path through
 `ORCA_CLI_COMMAND`.
 
+---
+
+## Contents
+
+- [1. Identity and the inbox consumer](#1-identity-and-the-inbox-consumer)
+- [2. Collecting and acknowledging](#2-collecting-and-acknowledging)
+- [3. Coordinator liveness and wakeups](#3-coordinator-liveness-and-wakeups)
+  - [3.1 The contract: a wake is a command that ends](#31-the-contract-a-wake-is-a-command-that-ends)
+  - [3.2 This machine: pi and omp](#32-this-machine-pi-and-omp)
+  - [3.3 Without that capability](#33-without-that-capability)
+  - [3.4 Install the next wait after every wake](#34-install-the-next-wait-after-every-wake)
+  - [3.5 The wait, and its switches](#35-the-wait-and-its-switches)
+- [4. The communication contract workers must follow](#4-the-communication-contract-workers-must-follow)
+- [5. Missing completion reports and lost contact](#5-missing-completion-reports-and-lost-contact)
+- [6. Teardown](#6-teardown)
+
+---
+
 ## 1. Identity and the inbox consumer
 
 After creating a Run, write the returned Run ID, coordinator handle, and each
@@ -17,9 +35,16 @@ does not take `--from`.
 Each Run gets its own directory and its own single consumer. Startup example:
 
 ```bash
-ORCA_CLI_COMMAND=<confirmed executable path> nohup <SKILL_DIR>/scripts/inbox-loop.sh \
-  <run_id> /tmp/orch-<repo>-<run_id> <coordinator_handle> \
-  > /tmp/orch-<repo>-<run_id>.log 2>&1 &
+ORCA_CLI_COMMAND=<confirmed executable path> <SKILL_DIR>/scripts/inbox-loop.sh \
+  <run_id> /tmp/orch-<repo>-<run_id> <coordinator_handle>
+```
+
+Run that command the way §3 describes — as a blocking call the harness surfaces — **not** as
+`nohup … &`. The script persists every batch atomically, acknowledges heartbeat-only batches, and
+then **ends the process** when something needs you: that end is your wakeup. `--status` inspects a
+directory without consuming its queue:
+
+```bash
 <SKILL_DIR>/scripts/inbox-loop.sh --status /tmp/orch-<repo>-<run_id>
 ```
 
@@ -30,18 +55,19 @@ constraint. Do not migrate an old script's run directory: confirm and stop the o
 waiter first, keep the old messages, and use a fresh Run-specific directory.
 
 `--status` only inspects that directory's lock and state; it does not scan other Runs' processes
-and does not consume the queue. Having no waiter during `phase=backoff` is a normal state and is
-not a reason to start another instance. When you see `loop: DEAD`, check `watch.log`'s error and
-the current Run binding first; do not auto-restart until the binding/permission/waiter issue is
-resolved, and do not kill another Run's process.
+and does not consume the queue. `loop: DEAD` is the normal resting state after a wake — the loop
+exited on purpose, and `state.json` then carries `phase=wake`, the reason and the `deliveryId`.
+`phase=error`, or an `ERROR` line in `watch.log`, is a different thing: that stop is a wake you
+must investigate before restarting. Do not auto-restart until the binding, permission or waiter
+issue is resolved, and do not kill another Run's process.
 
-Each cycle the script first checks without a filter, then waits at most 30 seconds, so heartbeats
-and ordinary messages cannot pile up at the head of the queue. A complete response is written
-atomically to `deliveries/*.json`, hashed by deliveryId; files are never rotated away. The same
-unacknowledged batch is recorded as PENDING only once and re-checked at a longer interval
-afterwards, so FIFO replay cannot cause duplicate log lines and CLI calls. `NEW-MESSAGE` is only
-a hint about the most recently saved batch, **not a to-do list**; when a new message arrives or a
-session resumes, enumerate every delivery file and reconcile against the ledger.
+Each cycle the script first checks without a filter and then installs a blocking wait, so
+heartbeats and ordinary messages cannot pile up at the head of the queue. A complete response is
+written atomically to `deliveries/*.json`, hashed by deliveryId; files are never rotated away. A
+batch that is **already** on disk is never treated as news: it is your outstanding duty, so the
+loop pauses instead of waking you again for it or busy-looping on it. `NEW-MESSAGE` is only a hint
+about the most recently saved batch, **not a to-do list**; when a new message arrives or a session
+resumes, enumerate every delivery file and reconcile against the ledger.
 
 Errors are written to disk explicitly and end the process; a CLI failure, a JSON error or a lost
 binding must never be interpreted as an empty queue.
@@ -78,29 +104,116 @@ A successful `send` is a durable enqueue; wake and nudge are best-effort. `nohup
 appearing, or a live background consumer does **not** mean the agent will produce a new turn, and
 you must not claim "it will continue automatically" on that basis.
 
-At dispatch time, choose and record the waiting method that fits the current harness's real tool
-contract:
+### 3.1 The contract: a wake is a command that ends
 
-- With a confirmed task-completion notification: use that mechanism to wait for a new local
-  delivery or for a check deadline; after each notification returns, handle messages first and
-  then install the next wait. The notification mechanism's own completion and re-installation
-  must be observable.
-- Without a reliable notification: keep the current coordinator turn and wait in bounded tool
-  calls, never more than 60 seconds each; after each return, read the inbox and ledger and
-  continue other authorized work. Do not emit a final and assume a background script will wake
-  you.
+Harness-independent, a wake has exactly one shape:
 
-- When the environment forces the turn to end: report explicitly which Dispatches are still
-  running, the last progress, the ledger directory, and the limitation that you cannot be woken
-  automatically; the recovery entry point is that ledger plus the current Orca state. Never write
-  this state as completed.
+> A wake is a **command whose end — or whose output — the harness surfaces to you as a new agent
+> message.**
 
-Check messages after every long operation, and no less than once every 60 seconds while idle.
-After three rounds with no progress, enumerate this Run's
-`worker-list --include-remote --json` (read every page if paginated), inspect `projection.nextAction`
-and `liveness.reason`, and read `worker-show` / `worker-read` for the relevant Dispatches. Check
-all three of local files, the server-side queue and worker state — do not stare only at
-NEW-MESSAGE, and do not wait only for a worker_done.
+Nothing else wakes you. The inbox consumer is built to *be* that command: it persists the batch
+first, then ends the process and prints exactly one line on stdout. That is the correct division of
+labour, and it is stated as: **the consumer persists batches and ends on a wake event.** It still
+never sends anything, never replies, and never acknowledges a batch a human has to read.
+
+The wake line (stdout, exactly one line):
+
+```json
+{"event": "wake", "reason": "delivery", "run": "run_ab12", "terminal": "term_coord",
+ "deliveryId": "dlv_9f", "types": ["worker_done"], "messageCount": 1,
+ "saved": "/tmp/orch-repo-run_ab12/deliveries/<sha256-of-deliveryId>.json", "detail": "new batch dlv_9f saved: 1 message(s) ['worker_done']"}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `event` | always `wake` — the line's purpose, so a parser never has to guess |
+| `reason` | `delivery` (a new batch was persisted), `worker_state` (a worker signature changed), `error` (the loop's own fatal error) |
+| `run`, `terminal` | the binding the loop was installed for |
+| `deliveryId` | the batch that caused the wake; `null` for the other two reasons |
+| `types` | the **whole** batch's message types in FIFO order; `[]` when the wake was not a batch |
+| `messageCount` | number of messages in that batch; `0` otherwise |
+| `saved` | the file the batch was written to *before* the wake; `null` otherwise |
+| `detail` | one line naming the reason; for `error`, the error text, flattened and truncated |
+
+Exit codes: `0` a wake; `1` a fatal error — itself a wake, with the same line at `reason=error`
+plus `watch.log` and `state.json phase=error`; `2` usage, an already-running loop, or a refused
+rebinding. Outside `--status`, stdout carries that line and nothing else.
+
+All three legs wake, and each one exists because the others cannot see it:
+
+1. **New messages** — a batch that was not on disk before and contains anything other than
+   heartbeats. A heartbeat-only batch is acknowledged and does **not** wake: it carries no
+   decision. A FIFO replay of a batch already saved does not wake either — it is your outstanding
+   duty, not news, so handle it from the ledger.
+2. **The loop's own death or error** — a non-zero exit is a wake by itself, because the process
+   ending is what the harness surfaces; the `reason=error` line says why. A consumer that stops
+   silently is the "total silence" case in §5.1, not an empty queue.
+3. **Worker settlement state** — every `WORKER_POLL_SECONDS` (default 15 s) the loop reads the
+   read-only `worker-list --run <run_id> --json` and reduces this Run's workers to a signature of
+   `dispatchId:workerState:dispatchStatus:stage`. When the signature no longer matches the one
+   taken at install time, it wakes. This is what catches a worker that changed state *without
+   sending a message* — crashed, requeued, settled without a report — so you do not have to wait
+   for a `worker_done` that may never come.
+
+Compare **whole signature lines, never a count**. A count cannot see one worker replace another,
+and a snapshot taken after the event is how a real wakeup was missed once already: a question that
+landed before the snapshot never triggered it, and only a content-level fingerprint fixed it. For
+the same reason, never let a single signal (a file appearing, a `NEW-MESSAGE` marker, a heartbeat)
+stand in for "there is something here".
+
+### 3.2 This machine: pi and omp
+
+Their bash tool surfaces long calls as jobs: a non-PTY command that outlives the foreground wait is
+moved into a background job (`Backgrounded as job <id> …`), and its completion or failure is
+delivered by the job manager as a follow-up message. Results also auto-deliver without polling —
+`wait` blocks until the next background result or peer message, and its safety cap is 30 minutes.
+So the wake is:
+
+- install the loop as that long call and end the turn;
+- when its stdout arrives, **that message is the wake**: handle the batch, then install the next
+  wait (§3.4).
+
+Polling the loop's stdout, or sleeping in the foreground to watch the job, is the anti-pattern this
+replaces: it burns turns and can miss the harness's own delivery.
+
+### 3.3 Without that capability
+
+Fall back to the bounded foreground tier: keep the coordinator turn and wait in tool calls, no more
+than 60 seconds each; after each return, read the inbox and ledger and continue other authorized
+work. Do not emit a final and assume a background script will wake you. If the environment forces
+the turn to end, report explicitly which Dispatches are still running, the last progress, the
+ledger directory, and the limitation that you cannot be woken automatically; the recovery entry
+point is that ledger plus the current Orca state. Never write that state as completed.
+
+### 3.4 Install the next wait after every wake
+
+Every wake ends the process on purpose, so **handling messages and installing the next wait are one
+step**. Not re-installing is exactly the failure users report as "poke it and it moves, then it
+stops responding": the batch was persisted, the wake arrived, the messages were handled — and then
+nothing was waiting any more, so the next message had no listener. Treat the reinstall like the ack
+in §2: part of finishing the batch.
+
+Timeouts are not wakes. A blocking `check --wait` that reaches `--timeout-ms` returns an empty
+batch, the loop backs off and installs the next wait by itself, and nothing is printed.
+
+### 3.5 The wait, and its switches
+
+The consumer waits with the CLI's native block — `check --wait --types
+worker_done,escalation,question --timeout-ms <n>` — instead of a short poll plus `sleep`. Facts to
+rely on, straight from `check --help`: `--types` is only the wake **condition**; the Delivery a
+`--wait` returns is always the whole FIFO batch and is never filtered by type; and the CLI writes a
+JSON keepalive line to **stderr** every 15 seconds so a caller can tell the process is alive.
+`_keepalive` is unrelated to heartbeat messages. The loop keeps that child's streams in its own
+files, so keepalive lines never contaminate the wake line on stdout.
+
+| Environment switch | Default | Meaning, and why that default |
+| --- | --- | --- |
+| `ORCA_CLI_COMMAND` | `orca` | the executable confirmed this round; the loop passes it to every call |
+| `WAIT_TIMEOUT_MS` | `30000` | cap for one blocking `check --wait`. The loop re-installs the wait after each timeout, so the cap only decides how often it reconnects; keep it comfortably below whatever deadline the harness puts on the call |
+| `BACKOFF_SECONDS` | `5.0` | pause before installing the next wait after a timeout or an acknowledged heartbeat batch, so a CLI that answers instantly cannot be hammered |
+| `PENDING_BACKOFF_SECONDS` | `30.0` | pause while the FIFO head is a batch you have already saved and not acked. Long, because nothing changed on the server side yet |
+| `WORKER_POLL_SECONDS` | `15.0` | how often leg 3 re-reads the worker signature, during a wait and during a pause. Short enough to notice a change between two 30-second waits |
+| `WORKER_WATCH` | on (`1`) | leg 3 itself; `0` (or `false`/`off`/`no`) switches it off. On by default because it reads one read-only list per interval and it is the only leg that sees a worker change state without sending anything; switch it off for a Run whose workers churn their stage detail, or when the installed CLI cannot answer `worker-list --run` |
 
 ## 4. The communication contract workers must follow
 
@@ -131,10 +244,10 @@ order; the first two account for nearly every case.
 
 | Break | Symptom and one-line evidence | Action |
 | --- | --- | --- |
-| Wakeup | A `worker_done` is already on disk or in the queue, yet the coordinator's turn ended long ago and nothing started a new one: delivery files newer than your last turn, or a stale `NEW-MESSAGE`, with no confirmed wake method from §3 | `send` proves a durable enqueue only; wake and nudge are best-effort, and `scripts/inbox-loop.py` never wakes the agent. `nohup` plus a live consumer process is not a wake. Stay in whichever §3 branch applies: with a confirmed notification, the return of a blocking `check --wait` **is** the wake (it accepts a long `--timeout-ms` and prints a keepalive every 15 seconds); without one, keep the turn in bounded waits or record the un-wakeable state before yielding |
+| Wakeup | A `worker_done` is already on disk or in the queue, yet the coordinator's turn ended long ago and nothing started a new one: delivery files newer than your last turn, or a stale `NEW-MESSAGE`, with no confirmed wake method from §3 | A successful `send` proves a durable enqueue only; wake and nudge are best-effort. Confirm which §3 branch you have. With a harness that surfaces job completion, the end of the consumer — the wake line in §3.1 — **is** the wake; if it never arrived, check that the consumer was installed as §3.2 describes and not via `nohup`, and that its next wait was installed after the previous wake (§3.4). Without such a harness, stay in the bounded tier of §3.3 or record the un-wakeable state before yielding. Never read "the loop is alive" as "I will be woken" |
 | Unacked FIFO head | Earlier messages were fine, later `worker_done` messages never appear, and an unanswered question or decision sits at the head of the batch | `check` returns the bound Run's **oldest unacknowledged** Delivery and replays that exact batch until `--ack`, so one unacked batch hides everything behind it. Handle the whole batch, then ack that snapshot's `deliveryId` (§2 step 3). While a human decision blocks the head, read later messages with the read-only `check --all` (§2 step 4); `--all` never yields an ackable ID. An ack is not a reply |
 | Identity or mailbox | Nothing arrives at any inbox, or messages land where you are not looking | `check` names its caller with `--terminal <handle>` and rejects `--from`; a handle taken from a terminal title, from "the most recent terminal", or from another session or Run addresses the wrong mailbox. Take handles from the real calling identity (`orca status --json`) and keep them in the ledger. A `worker_done` or heartbeat cannot target a group, and its sender handle must equal the Dispatch assignee exactly or the task never settles |
-| Dead consumer | Total silence, heartbeats included: `--status` reports DEAD or `phase=error`, or `watch.log` has an `ERROR` line | The script writes CLI failures, JSON errors and lost bindings to disk and exits non-zero on purpose, so a stop is never an empty queue. Waiter slots are a cross-directory resource: an app restart, a second instance or another Run's loop can take the slot you needed. Before starting a new loop, confirm and stop the old one, and never migrate an old state directory |
+| Dead consumer | Total silence, heartbeats included: `--status` reports DEAD with `phase=error` or an `ERROR` line in `watch.log`; or the wake line arrived with `reason=error` | The script writes CLI failures, JSON errors and lost bindings to disk and exits non-zero on purpose, so a stop is never an empty queue — and that stop is itself a wake (§3.1). Read the `ERROR` line and the `detail`; a binding/waiter problem usually means another instance or another Run's loop took the slot. Waiter slots are a cross-directory resource: before starting a new loop, confirm and stop the old one, and never migrate an old state directory |
 | Worker never sent | Only heartbeats arrive, or a plain final that claims success does; an auto-acked heartbeat-only batch looks like traffic while reporting nothing | Write the §4 contract into the spec, and classify with 5.3 |
 
 ### 5.2 Reconcile all three sources, never one
@@ -144,7 +257,8 @@ empty, or healthy when it is not:
 
 1. **Local**: `--status` for `loop`/`phase`; enumerate **every** `deliveries/*.json` instead of
    trusting `NEW-MESSAGE`, which hints at the newest saved batch and is not a to-do list; read the
-   `ERROR` lines in `watch.log`.
+   `ERROR` lines in `watch.log`, and `state.json`'s `phase=wake` reason for whatever ended the last
+   install.
 2. **Server queue**: the read-only `check --run <run_id> --terminal <handle> --all --json`.
 3. **Worker state**: `worker-list --include-remote --json` (read every page), then `worker-show`
    and `worker-read` for the Dispatches in question — `projection.attention.requiresAction`, the
@@ -176,6 +290,7 @@ settlement and persisted artifacts, per the lifecycle protocol; a settled termin
 acceptance or merge must not be silently left behind — keep an explicit next step and deadline in
 the ledger. Once every expected Dispatch is handled and the ledger has no open items, stop this
 Run's consumer (read the loop PID from this directory and confirm the process identity before
-SIGTERM); the script reclaims its own CLI child processes. `nohup` does not exit with the session.
-Only after the persistent audit report has saved the key receipts and conclusions should you
-consider cleaning up temporary message files.
+SIGTERM); the script reclaims its own CLI child processes. A consumer that already exited on a wake
+needs no teardown — install nothing further and leave `state.json` as the record. Only after the
+persistent audit report has saved the key receipts and conclusions should you consider cleaning up
+temporary message files.

@@ -56,6 +56,19 @@ cases:
       - "WHO_DECIDES 为 human（不是 coordinator 代答）。"
       - "WHY 按不可逆/live 数据升级处理，即使 worker 声称可恢复。"
 
+  - name: wake_then_reinstall
+    description: "唤醒是收件器结束，且每次唤醒后必须装回等待。"
+    prompt: |
+      本 Run 的 worker 正在跑，收件箱安静了一阵。
+      只输出：
+      1. WAKE_SOURCE
+      2. AFTER_WAKE — 触发那一刻你做什么
+      3. STALL_RISK — 一句
+    expectations:
+      - "WAKE_SOURCE 是收件器结束（连同它那一行 stdout），不是文件出现，也不是后台进程还活着。"
+      - "AFTER_WAKE 处理批次后装回下一次等待。"
+      - "STALL_RISK 说明唤醒之后没有新等待会让该 Run 无人监听。"
+
   - name: channel_discussion_stops
     description: "纯讨论走 A 通道，不派活。"
     prompt: |

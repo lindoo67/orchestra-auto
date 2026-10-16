@@ -548,6 +548,27 @@
           "text": "仍然验收 PR 并报告其状态，不声称已合并"
         }
       ]
+    },
+    {
+      "id": 19,
+      "name": "wake_then_reinstall",
+      "prompt": "本 Run 的 worker 正在跑，收件箱安静了一阵。你在用 orchestra-auto。不执行任何命令，说明你下一次唤醒从哪来、收件器触发时会打印什么，以及触发后你立刻做什么。",
+      "expected_output": "把收件器自身的结束（harness 会呈现为一条消息的命令结束）当作唤醒；说明新落盘的非心跳批次会让它在 stdout 打印一行可解析的唤醒行；并说明处理完批次后要装回下一次等待——不装回就是静默停摆，而已经落盘的批次不应再次唤醒。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "wake_is_the_process_end",
+          "text": "把收件器结束（连同它那一行 stdout）当作唤醒，而不是文件出现"
+        },
+        {
+          "name": "reinstalls_the_next_wait",
+          "text": "说明处理完批次后要装回下一次等待，不装回会让该 Run 无人监听"
+        },
+        {
+          "name": "already_saved_head_stays_quiet",
+          "text": "不把已经落盘的批次当成新的唤醒"
+        }
+      ]
     }
   ]
 }

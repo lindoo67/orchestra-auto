@@ -129,13 +129,15 @@ python3 -m unittest discover -s tests -v
 
 - `tests/test_inbox_loop.py` 用一个桩 CLI 驱动真实的收件脚本，断言那些安全关键行为：原子落盘、
   重读时内容完整、重复 delivery 不覆盖首次读取、只有 heartbeat 的批次才 ack（普通批次与混合
-  批次不 ack）、CLI 错误显式失败而不是伪装成空队列、以及单消费者文件锁。
+  批次不 ack）、CLI 错误显式失败而不是伪装成空队列、以及单消费者文件锁。它还钉住唤醒契约——
+  新落盘的非心跳批次要以一行可解析 stdout 结束进程，纯心跳批次不能，worker 状态变化要——并覆盖
+  原生 `check --wait` 路径、其 stderr keepalive，以及超时后重新装上等待。
 - `tests/test_package_content.py` 检查包本身：两个语言变体结构一致、frontmatter 合法且 `name`
   与目录一致、所有相对链接可解析、随包发布的每个 reference 都可达并声明了自己的触发条件、
   eval JSON 的形状与唯一性、`eval.yaml` 白名单、Python 的 `py_compile`、shell wrapper 的
   `bash -n`、MIT 许可，以及脱敏扫描。
 
-已记录结果为 **58 OK（1 skipped）**。这是主要的结构与行为门禁。
+已记录结果为 **76 OK（1 skipped）**。这是主要的结构与行为门禁。
 
 想单独跑某一条也可以：
 
