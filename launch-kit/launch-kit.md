@@ -127,7 +127,8 @@ show the safety net. Read the bracket notes as stage directions; they are not sp
 [1:20 — Close.]
 "It's two installable skills, English and Chinese, MIT, and the safety rules are
  the product. There's one script: it makes the message inbox atomic, deduplicated,
- and honest about failures. Link below."
+ and honest about failures — and when a message actually arrives it ends itself to
+ wake me, because a file on disk can't start a turn. Link below."
 
 [1:30 — END]
 ```
@@ -165,10 +166,14 @@ No. Scope, approach forks and the escalation five go to you. Only detail-class q
 directory placement, implementation technique, test style — are answered for you.
 
 **What is the one script?**
-`inbox-loop.py`: a standard-library poller that saves every delivery batch atomically by delivery ID,
-deduplicates by message ID, acknowledges only batches that are entirely heartbeats, and exits loudly
-on a CLI error instead of pretending the queue was empty. It deliberately has no ability to wake an
-agent.
+`inbox-loop.py`: a standard-library inbox consumer that saves every delivery batch atomically by
+delivery ID, deduplicates by message ID, acknowledges only batches that are entirely heartbeats, and
+exits loudly on a CLI error instead of pretending the queue was empty. It is also the wake, and the
+wake is an ending: a file on disk cannot start a coordinator turn, but the exit of a long-running
+command is what the harness surfaces as a new message. So the consumer ends the process and prints
+exactly one machine-readable JSON line on stdout when a newly persisted non-heartbeat batch arrives
+(`reason=delivery`), when this Run's worker signature changes (`reason=worker_state`), or when the
+loop itself fails (`reason=error`, non-zero exit) — which is why it is reinstalled after every wake.
 
 **Is it safe to run?**
 It installs Markdown plus one standard-library Python script; installing runs nothing. The skill's
@@ -203,8 +208,9 @@ Covered by [README.md](../README.md). For a release, use:
 >
 > The interesting content is the safety rules, not the happy path: isolated worktrees, real evidence
 > that a worker's turn began, live worker settings instead of hardcoded agents, atomic and
-> deduplicated message handling, decisions escalated to a human, per-ticket-type gates, evidence
-> preserved before any revert, and bounded retries with stop thresholds.
+> deduplicated message handling by a consumer that ends the process to wake the coordinator,
+> decisions escalated to a human, per-ticket-type gates, evidence preserved before any revert, and
+> bounded retries with stop thresholds.
 >
 > Checks: `python3 -m unittest discover` — script behaviour against a stub CLI, dual-language parity,
 > frontmatter/link/JSON validity, and a disclosure scan that is written not to cry wolf.
@@ -240,11 +246,12 @@ Do **not** write a submission post — there is no submission channel. What a ma
 >
 > It's Orca-specific — it drives `orca orchestration` verbs — and says so up front. The interesting
 > part is the safety rules: per-ticket worktrees, real start evidence, live worker settings rather
-> than a hardcoded agent, atomic message handling with one small stdlib script, decisions escalated
-> to a human, gates by ticket type, evidence preserved before any revert, bounded retries.
+> than a hardcoded agent, atomic message handling with one small stdlib script that ends the process
+> to wake the coordinator, decisions escalated to a human, gates by ticket type, evidence preserved
+> before any revert, bounded retries.
 >
-> 19 scenarios per language in `evals/`, plus real behaviour tests for the inbox script (atomic
-> writes, replay safety, ack discipline, loud failure). MIT. Feedback welcome.
+> 20 scenarios per language in `evals/`, plus real behaviour tests for the inbox script (atomic
+> writes, replay safety, ack discipline, the wake line, loud failure). MIT. Feedback welcome.
 
 ### 6.4 X / Twitter
 
@@ -291,8 +298,9 @@ subreddits punish launch posts and reward "here is what went wrong for me".
 > ```
 >
 > Most of it is prose: when to isolate, what counts as evidence, which questions go to the human,
-> when to stop retrying. There's one small stdlib script that saves message batches atomically and
-> only auto-acks batches that are entirely heartbeats.
+> when to stop retrying. There's one small stdlib script that saves message batches atomically,
+> only auto-acks batches that are entirely heartbeats, and ends the process when a real batch lands
+> — that exit is what wakes the coordinator.
 >
 > Repo: https://github.com/whutlichao/orchestra-auto — happy to hear where the rules are wrong;
 > I'd rather be corrected than keep guessing.
@@ -316,9 +324,9 @@ subreddits punish launch posts and reward "here is what went wrong for me".
 > question before answering it, and send scope changes to the human; run gates by ticket type; keep
 > the evidence before reverting an odd diff; stop after bounded retries.
 >
-> One small standard-library Python script handles the inbox. The rest is Markdown plus 19
-> prompt-level scenarios per language so the reasoning is testable, and real behaviour tests for the
-> script.
+> One small standard-library Python script handles the inbox and ends the process to wake the
+> coordinator when a real batch lands. The rest is Markdown plus 20 prompt-level scenarios per
+> language so the reasoning is testable, and real behaviour tests for the script.
 >
 > It's deliberately not portable: the judgements transfer, the commands don't. Curious whether
 > others hit the same failures or different ones.
@@ -344,7 +352,8 @@ subreddits punish launch posts and reward "here is what went wrong for me".
 > ```
 >
 > 内容大部分是判断规则：什么时候隔离、什么算证据、哪些问题必须问人、什么时候该停止重试。
-> 只带一个小脚本（仅标准库），负责把消息批次原子落盘、只自动 ack 全是心跳的批次。
+> 只带一个小脚本（仅标准库），负责把消息批次原子落盘、只自动 ack 全是心跳的批次，并在真批次
+> 到达时结束进程——那次退出就是唤醒 coordinator 的信号，所以每次唤醒之后都要重新安装。
 >
 > 仓库：https://github.com/whutlichao/orchestra-auto
 > 欢迎指出规则里的错误——我宁愿被纠正，也不想继续猜。

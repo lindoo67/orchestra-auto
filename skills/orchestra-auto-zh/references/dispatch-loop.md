@@ -60,8 +60,10 @@ Run/coordinator handle、Task/Dispatch/worker handle/worktree、最后进展、�
 完成回执、PR、下一次检查时间。上下文压缩或恢复后先读台账与真实 Orca 状态，不凭旧对话猜身份。
 
 - 首个 worker 启动前准备唯一收件器与等待方式；每次派活后核验 turn 已开始并检查收件器。
-- 每个 Run 一个后台收件器，绑定真实 coordinator handle；消息按 deliveryId 原子保存，
-  重启不覆盖、不轮转删除未处理证据。脚本不提供 agent 唤醒能力。
+- 每个 Run 一个收件器，绑定真实 coordinator handle；消息按 deliveryId 原子保存，
+  重启不覆盖、不轮转删除未处理证据。收件器同时就是唤醒：出现新的非心跳批次或 worker 状态变化时，
+  它结束进程并在 stdout 打印一行（见 [通信与唤醒](inbox-and-waiting.md) §3），因此要作为 harness
+  能呈现的调用装上，并在每次唤醒后重新装上。
 - 每条消息按 message ID 去重，验证 Run/Task/Dispatch。处理整批及所需终端归属决定后才 ack。
   当前批次被人类决策阻塞时用只读 `check --all` 检查后续消息，及时处理其他 worker；
   不能把 ack 当回复，也不能从另一次 check 抽取一个未审阅的 deliveryId 来 ack。

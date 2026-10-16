@@ -548,6 +548,27 @@
           "text": "Verifies the PR and reports its state without claiming a merge"
         }
       ]
+    },
+    {
+      "id": 19,
+      "name": "wake_then_reinstall",
+      "prompt": "Workers are running for this Run and the inbox has been quiet for a while. You are using orchestra-auto. Explain, without executing anything, where your next wake comes from, what the inbox consumer prints when it fires, and what you do immediately after it fires.",
+      "expected_output": "Names the consumer's own exit as the wake (a command whose end the harness surfaces as a message), says a new non-heartbeat batch makes it print one parseable line on stdout, and states that the next wait is installed after the batch is handled: not re-installing it is a silent stall, and a batch that is already on disk must not wake again.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "wake_is_the_process_end",
+          "text": "Treats the consumer ending, with its single stdout line, as the wake rather than a file appearing"
+        },
+        {
+          "name": "reinstalls_the_next_wait",
+          "text": "Says to install the next wait after handling the batch, and that skipping it leaves the Run silently unwatched"
+        },
+        {
+          "name": "already_saved_head_stays_quiet",
+          "text": "Does not treat a batch that is already on disk as a new wake"
+        }
+      ]
     }
   ]
 }

@@ -26,7 +26,7 @@ description: >-
 
 ```text
 用户输入 → §1 确定交付终点与通道 → §2 铁律自检 → 需要编辑时 §4 派 worker
-              → §4.5 后台收消息、前台推进（不干等）⇄ §5 应答（决策问人）→ §6 门禁验收
+              → §4.5 保持收件器装着（它结束就是唤醒）、前台推进 ⇄ §5 应答（决策问人）→ §6 门禁验收
               → 打回 or 推进 → 项目 PR 通过 G-merge 后 §6.5 自动合并 → 收尾（worker-release，
               reclaimable 清零）→ §7 收口报告；达到约定交付终点即停止
 ```
@@ -41,7 +41,7 @@ description: >-
 | `references/spec-contract.md` | 给 worker 写 spec 时，任何通道、任何票型 |
 | `references/reply-protocol.md` | 对 worker 提问分类或应答，或判断升级问人还是代答时 |
 | `references/gate-acceptance.md` | 票据收尾、要选门禁时；合并项目 PR 或结算 worker 时 |
-| `references/inbox-and-waiting.md` | 每个 Run 首次派活前（身份绑定、收件器、唤醒与失联）；后续派活只需核对收件器仍有效；worker 的消息收不到时 |
+| `references/inbox-and-waiting.md` | 每个 Run 首次派活前（身份绑定、收件器、唤醒如何安装与开关、失联恢复）；每次唤醒后装回下一次等待；worker 的消息收不到时 |
 | `references/worker-start-and-recovery.md` | `turnStart` 未确认、权限提示或 worker 失联 |
 | `references/gates-docs-planning.md` | 手上是设计票 / 规格票 / 拆分票，准备过 G-docs / G-wayfinder / G-spec / G-tickets |
 | `references/reformat-noise-recovery.md` | §4.0.1 检出万行级未提交改动（格式化重排噪声） |
@@ -150,8 +150,7 @@ Orca 默认把 worker 放进当前（= main）工作区；**orchestra-auto 覆�
 
 ### 4.5 通信闭环
 
-派活前读 [通信与恢复协议](references/inbox-and-waiting.md)：首个 worker 前准备唯一收件器、仓库外台账、按 message ID 去重且整批处理完才 ack、单次前台等待 ≤60 秒、三轮无进展后按证据恢复。
-仍有在途任务时结束 turn，必须有**已确认**的唤醒机制——未验证的后台进程、消息文件或 send 成功不算。细节见 [派活闭环](references/dispatch-loop.md)。
+派活前读 [通信与恢复协议](references/inbox-and-waiting.md)：唯一收件器、仓库外台账、按 message ID 去重且整批处理完才 ack，以及让它持续生效的那一条——收件器**在唤醒事件上结束进程**，这个结束就是下一次 turn 的起点。按该文件 §3 作为 harness 能呈现的长调用装上，不要用 `nohup`；每次唤醒后处理批次并装回下一次等待，唤醒之后没有新等待就是静默停摆。没有作业完成通道时，保持 turn 有界等待（单次 ≤60 秒），三轮无进展后按证据恢复。细节见 [派活闭环](references/dispatch-loop.md)。
 
 ## 5. 应答协议：决策问人，细节代答
 

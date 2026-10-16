@@ -146,14 +146,17 @@ python3 -m unittest discover -s tests -v
   safety-critical behaviours: atomic persistence, completeness against a re-read, duplicate
   deliveries not overwriting the first read, heartbeat-only batches being acknowledged while normal
   and mixed batches are not, a CLI error failing loudly instead of looking like an empty queue, and
-  the single-consumer lock.
+  the single-consumer lock. It also pins the wake contract — a newly persisted non-heartbeat batch
+  ends the process with one parseable line on stdout, a heartbeat-only batch does not, and a worker
+  state change does — plus the native `check --wait` path, its stderr keepalives, and the reinstall
+  after a timeout.
 - `tests/test_package_content.py` checks the package itself: parity between the two language
   variants, frontmatter validity with `name` matching the directory, every relative link resolving,
   every shipped reference being reachable and declaring its trigger, eval JSON shape and uniqueness,
   the `eval.yaml` allowlist, `py_compile` on the Python, `bash -n` on the shell wrapper, the MIT
   licence, and the leak scan.
 
-The recorded result is **58 OK (1 skipped)**. This is the primary structural and behavioral gate.
+The recorded result is **78 OK (1 skipped)**. This is the primary structural and behavioral gate.
 
 Individual check commands, if you want them directly:
 
@@ -219,9 +222,10 @@ Two manual checks belong beside it, and neither can be automated from inside the
 
 ## Evals
 
-Each language variant ships an `evals/evals.json` with 19 prompt-level scenarios covering channel
+Each language variant ships an `evals/evals.json` with 20 prompt-level scenarios covering channel
 routing, worker-slot resolution, start verification, gate choice, review arrangement, send-back
-judgement, decision classification, escalation and the merge exceptions.
+judgement, decision classification, escalation, the merge exceptions and the wake-then-reinstall
+contract.
 
 These are **scenario checks, not end-to-end proof**: they show whether an agent that has read the
 skill reasons the way the skill intends. They do not prove that orchestration works against a live

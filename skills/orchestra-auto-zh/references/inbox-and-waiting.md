@@ -5,6 +5,24 @@
 本文件使用 `<ORCA>` 表示本轮选定的可执行文件；
 脚本通过 `ORCA_CLI_COMMAND` 接收该路径。
 
+---
+
+## 目录
+
+- [1. 身份和收件器](#1-身份和收件器)
+- [2. 收件与确认](#2-收件与确认)
+- [3. 协调者持续运行与唤醒](#3-协调者持续运行与唤醒)
+  - [3.1 契约：唤醒就是「一条会结束的命令」](#31-契约唤醒就是一条会结束的命令)
+  - [3.2 本机形态：pi 与 omp](#32-本机形态pi-与-omp)
+  - [3.3 没有这种能力时](#33-没有这种能力时)
+  - [3.4 每次唤醒后必须重新装上等待](#34-每次唤醒后必须重新装上等待)
+  - [3.5 等待方式与开关](#35-等待方式与开关)
+- [4. worker 必须执行的通信契约](#4-worker-必须执行的通信契约)
+- [5. 缺完成报告与失联恢复](#5-缺完成报告与失联恢复)
+- [6. 收尾](#6-收尾)
+
+---
+
 ## 1. 身份和收件器
 
 创建 Run 后把实际返回的 Run ID、coordinator handle、各 Task/Dispatch/worker handle 写入
@@ -14,9 +32,15 @@ repo 外台账。句柄来自真实调用方身份，不从终端标题或“最
 每个 Run 使用独立目录、唯一收件器。启动示例：
 
 ```bash
-ORCA_CLI_COMMAND=<已确认的可执行文件路径> nohup <SKILL_DIR>/scripts/inbox-loop.sh \
-  <run_id> /tmp/orch-<repo>-<run_id> <coordinator_handle> \
-  > /tmp/orch-<repo>-<run_id>.log 2>&1 &
+ORCA_CLI_COMMAND=<已确认的可执行文件路径> <SKILL_DIR>/scripts/inbox-loop.sh \
+  <run_id> /tmp/orch-<repo>-<run_id> <coordinator_handle>
+```
+
+按 §3 的方式运行它——作为 harness 能呈现结果的阻塞调用——**不要**用 `nohup … &`。
+脚本把每批投递原子落盘、自动 ack 纯心跳批次，在出现需要你处理的事件时**结束进程**：
+这个结束就是你的唤醒。`--status` 只查看目录，不消费队列：
+
+```bash
 <SKILL_DIR>/scripts/inbox-loop.sh --status /tmp/orch-<repo>-<run_id>
 ```
 
@@ -24,14 +48,20 @@ ORCA_CLI_COMMAND=<已确认的可执行文件路径> nohup <SKILL_DIR>/scripts/i
 双实例，目录绑定 Run/terminal/CLI 后禁止复用；Orca 的 waiter 槽仍是跨目录的最终约束。
 不要迁入旧脚本运行目录：先确认并停止旧 loop 及其 waiter，保留旧消息，使用新的 Run 专属目录。
 
-`--status` 只查看该目录的锁与状态，不扫描其他 Run 的进程，不消费队列。`phase=backoff`
-期间没有 waiter 是正常状态，不能因此另起实例。`loop: DEAD` 时先查 `watch.log` 的错误与
-当前 Run 绑定；绑定/权限/waiter 问题解决前不自动重启，不杀其他 Run 的进程。
+`--status` 只查看该目录的锁与状态，不扫描其他 Run 的进程，不消费队列。唤醒后 `loop: DEAD`
+是正常静止状态——loop 是刻意退出的——此时 `state.json` 带 `phase=wake`、原因与 `deliveryId`。
+`phase=error` 或 `watch.log` 里的 `ERROR` 行是另一回事：那次停止本身就是一次唤醒，重启前
+必须先查清。绑定、权限或 waiter 问题解决前不自动重启，不杀其他 Run 的进程。
 
-脚本每轮先做无过滤 check，再最多等待 30 秒，防止心跳与普通消息积压。完整响应按 deliveryId
-哈希原子写入 `deliveries/*.json`；文件不轮转删除。同一未确认批次只记录一次 PENDING，
-随后按较长间隔复查，避免 FIFO 重放造成重复日志和 CLI 调用。`NEW-MESSAGE` 仅是最近落盘的提示，
-**不是待办清单**；收到新消息或恢复会话时枚举全部 delivery 文件，对照台账处理。
+**判活绝不能只看 pid 文件。** 收件器退出时会 unlink `inbox-loop.pid`，所以「pid 文件不存在」
+与「文件里的 pid 已不存在」都算死亡，而只有 `state.json` 说明它是**怎么死的**：`phase=error`
+带错误文本，或 `phase=wake` 带唤醒原因。只轮询 pid 文件存活的外挂等待器就因此漏掉过一次真实
+死亡——收件器退出时已把文件删掉，等待器把「没东西可查」读成了「一切正常」，继续睡。
+
+脚本每轮先做无过滤 check，再装上阻塞等待，防止心跳与普通消息积压。完整响应按 deliveryId
+哈希原子写入 `deliveries/*.json`；文件不轮转删除。**已经在盘上**的批次从不当作新消息：它是
+你尚未处理的责任，脚本会暂停等待而不是为它再唤醒一次或空转。`NEW-MESSAGE` 仅是最近落盘的
+提示，**不是待办清单**；收到新消息或恢复会话时枚举全部 delivery 文件，对照台账处理。
 
 错误显式落盘并退出，不能将 CLI 失败、JSON 错误或绑定失效解释成空队列。
 
@@ -59,19 +89,110 @@ coordinator。类型过滤只决定 waiter 何时醒来，不改变整批处理�
 `send` 成功是 durable enqueue；wake/nudge 是 best effort。`nohup`、文件出现、后台
 收件器存活都不等于 agent 会产生新 turn，不能据此宣称“会自动继续”。
 
-派活时依据当前 harness 的实际工具契约选择并记录等待方式：
+### 3.1 契约：唤醒就是「一条会结束的命令」
 
-- 有已确认的任务完成通知：用该机制等待本地新 delivery 或检查期限到达；每次通知返回后
-  先处理消息，再重新安装下一次等待。通知机制自身的完成与续装必须可观察。
-- 没有可靠通知：保持 coordinator 当前 turn，用工具有界等待，每次不超过 60 秒，返回后
-  读收件箱与台账并继续其他已授权工作。不能发 final 后假定后台脚本会叫醒自己。
-- 环境必须结束 turn：明确报告仍在运行的 Dispatch、最后进展、台账目录与无法自动唤醒的
-  限制；恢复入口是读该台账及 Orca 当前状态。不能把这个状态写成已完成。
+与 harness 无关，唤醒只有一种形态：
 
-每次长操作返回后检查消息；空闲时不超过 60 秒检查一次。连续三轮无进展，枚举当前 Run 的
-`worker-list --include-remote --json`（有分页须读完），检查 projection.nextAction 和
-liveness.reason，并对相关 Dispatch 读取 worker-show/worker-read。检查本地文件、服务端
-队列、worker 状态三处，不能只盯 NEW-MESSAGE，也不能只等 worker_done。
+> 唤醒 = 一条**结束（或输出）会被当前 harness 呈现成一条 agent 消息**的命令。
+
+除此之外没有东西能叫醒你。收件器就是被做成这条命令的：它先把批次落盘，然后结束进程并在
+stdout 打印恰好一行。这才是正确的分工，写全了就是：**收件器负责落盘，并在唤醒事件上结束。**
+它仍然从不发消息、从不代为回复、从不 ack 需要人看的批次。
+
+唤醒行（stdout，恰好一行）：
+
+```json
+{"event": "wake", "reason": "delivery", "run": "run_ab12", "terminal": "term_coord",
+ "deliveryId": "dlv_9f", "types": ["worker_done"], "messageCount": 1,
+ "saved": "/tmp/orch-repo-run_ab12/deliveries/<deliveryId 的 sha256>.json", "detail": "new batch dlv_9f saved: 1 message(s) ['worker_done']"}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `event` | 恒为 `wake`——这一行的用途，解析方不必猜 |
+| `reason` | `delivery`（新批次已落盘）、`worker_state`（worker 签名变化）、`error`（收件器自身致命错误） |
+| `run`、`terminal` | 这次安装所绑定的 Run 与句柄 |
+| `deliveryId` | 触发唤醒的批次；另外两种原因下为 `null` |
+| `types` | **整批**消息的类型，按 FIFO 顺序；非批次唤醒时为 `[]` |
+| `messageCount` | 该批消息条数；非批次唤醒时为 `0` |
+| `saved` | 唤醒**之前**已写入的文件；非批次唤醒时为 `null` |
+| `detail` | 一行说明原因；`error` 时是错误文本，已压平成一行并截断 |
+
+退出码：`0` 唤醒；`1` 运行中的收件器自身的致命错误——同样是一次唤醒，带同一行（`reason=error`）
+以及 `watch.log` 与 `state.json phase=error`；`2` 循环尚未启动就被拒绝安装——本状态目录已被另一个
+实例占用，或该目录已绑定到另一个 Run/句柄/CLI（两者都打印同样的 `reason=error` 那一行，并在
+`watch.log` 里留一条 `ERROR`，且都不去动该目录所属循环的 `state.json`）——或参数即用法错误，
+后者是唯一一条 stdout 什么都不打印的路径：循环根本没启动，于是它在 stderr 上说明，也没有可上报的
+状态目录。除此之外，除 `--status` 外 stdout 只有那一行，没有别的内容。
+
+三条腿都会唤醒，每条都因为另外两条看不见它而存在：
+
+1. **新消息**——盘上原先没有、且并非全是心跳的批次。纯心跳批次会被自动 ack，**不**唤醒：
+   它不携带任何决策。已经落盘批次的 FIFO 重放也不唤醒——那是你尚未处理的责任，不是新消息，
+   照台账处理即可。
+2. **收件器自身死亡或错误**——非零退出本身就是一次唤醒，因为 harness 呈现的正是“进程结束”；
+   `reason=error` 那一行说明原因。静默停掉的收件器是 §5.1 的「彻底安静」，不是空队列。
+   现场实例：Orca app 重启时收件器正阻塞在 `check --wait`，CLI 回 `runtime_unavailable`
+   （“The Orca runtime closed the connection before responding…”，并给出 `request-show --request
+   <id>` 指引）。脚本落盘 `phase=error`、非零退出并打印 `reason=error`；消息不会丢——队列仍在
+   服务端，下次安装立刻取回。**绝不能为了迁就唤醒契约把错误退出改写成正常退出**：退出本身就是
+   唤醒，而吞掉失败的退出恰好会掩盖你正需要看的那次事故。
+3. **worker 结算状态**——每 `WORKER_POLL_SECONDS`（默认 15 秒），脚本用只读
+   `worker-list --run <run_id> --json` 把本 Run 的 worker 归约成一个
+   `dispatchId:workerState:dispatchStatus:stage` 签名；与安装时取的签名不一致即唤醒。
+   这一条负责抓住**没有发消息就变了状态**的 worker——崩溃、被重排、没报完成就结算——
+   这样你不必干等一个可能永远不来的 `worker_done`。
+
+比较要比较**整行签名，绝不要比个数**。个数看不出「一个 worker 被另一个替换」，而在事件之后
+才取快照正是真实漏唤醒的成因：那次提问落在快照之前，没有触发任何东西，直到改成内容级指纹
+才可靠。同理，不要让单一信号（文件出现、`NEW-MESSAGE` 标记、心跳）替代「这里有东西」。
+
+### 3.2 本机形态：pi 与 omp
+
+它们的 bash 工具把长命令呈现为作业：非 PTY 命令超出前台等待窗口后被移入后台作业
+（`Backgrounded as job <id> …`），其完成或失败由作业管理器作为 follow-up 消息投递；结果也会
+自动投递，无需轮询——`wait` 会阻塞到下一个后台结果或 peer 消息，安全上限 30 分钟。所以唤醒
+就是：
+
+- 把收件器作为那条长命令装上，然后结束 turn；
+- 它的 stdout 到达时，**那条消息就是唤醒**：处理批次，然后装上下一次等待（§3.4）。
+
+轮询收件器的 stdout，或在前台 sleep 盯着作业，就是要被替代的反模式：既浪费 turn，又可能
+错过 harness 自己的投递。
+
+### 3.3 没有这种能力时
+
+退回有界前台档：保持 coordinator 当前 turn，用工具有界等待，每次不超过 60 秒；返回后
+读收件箱与台账并继续其他已授权工作。不能发 final 后假定后台脚本会叫醒自己。若环境必须结束
+turn：明确报告仍在运行的 Dispatch、最后进展、台账目录与无法自动唤醒的限制；恢复入口是读该
+台账及 Orca 当前状态。不能把这个状态写成已完成。
+
+### 3.4 每次唤醒后必须重新装上等待
+
+每次唤醒都会刻意结束进程，所以**处理消息与装上下一次等待是同一步**。没重新装 = 用户说的
+「戳一下动一下，然后又不反应了」：批次落盘了、唤醒到了、消息也处理了，但已经没有东西在等，
+下一条消息无人接收。把「续装」当成 §2 里的 ack 一样，是处理完一批的收尾动作。
+
+超时不是唤醒。阻塞的 `check --wait` 到 `--timeout-ms` 后返回空批次，脚本自行退避并装上
+下一次等待，什么都不打印。
+
+### 3.5 等待方式与开关
+
+收件器用 CLI 原生阻塞等待——`check --wait --types worker_done,escalation,question
+--timeout-ms <n>`——而不是「短查 + sleep」轮询。可以直接依赖的事实（取自 `check --help`）：
+`--types` 只是唤醒**条件**；`--wait` 返回的 Delivery 永远是整批 FIFO、绝不按类型过滤；
+CLI 每 15 秒向 **stderr** 写一行 JSON keepalive，供调用方判断进程存活。`_keepalive` 与
+heartbeat 消息无关。脚本把该子进程的流放在自己的文件里，keepalive 永远不会污染 stdout 上的
+唤醒行。
+
+| 环境开关 | 默认 | 含义与默认理由 |
+| --- | --- | --- |
+| `ORCA_CLI_COMMAND` | `orca` | 本轮确认的可执行文件；脚本把它用于每次调用 |
+| `WAIT_TIMEOUT_MS` | `30000` | 单次阻塞 `check --wait` 的上限。超时后脚本自行续装等待，所以这个值只决定重连频率；应明显小于 harness 给该调用的期限 |
+| `BACKOFF_SECONDS` | `5.0` | 超时或 ack 掉纯心跳批次后、装下一次等待前的停顿，防止瞬间返回的 CLI 被打爆 |
+| `PENDING_BACKOFF_SECONDS` | `30.0` | FIFO 头部是你已落盘但尚未 ack 的批次时的暂停间隔。取值较长，因为服务端此时没有变化 |
+| `WORKER_POLL_SECONDS` | `15.0` | 第三条腿在等待中与暂停中重读 worker 签名的间隔。短到能在两次 30 秒等待之间发现变化 |
+| `WORKER_WATCH` | 开（`1`） | 第三条腿本身的开关；`0`（或 `false`/`off`/`no`）关闭。默认开：每个间隔只有一次只读列表调用，且它是唯一能看见「worker 变了状态却没发消息」的那条腿；若某 Run 的 worker stage 细节频繁抖动，或本机 CLI 无法应答 `worker-list --run`，就关掉它 |
 
 ## 4. worker 必须执行的通信契约
 
@@ -94,10 +215,10 @@ liveness.reason，并对相关 Dispatch 读取 worker-show/worker-read。检查�
 
 | 断点 | 症状与一眼判据 | 动作 |
 | --- | --- | --- |
-| 唤醒 | worker_done 已在盘上或队列里，但协调者的 turn 早已结束、没有东西起新 turn：delivery 文件比你上一次 turn 更新，或 `NEW-MESSAGE` 早已过期，而 §3 的唤醒方式从未被确认 | `send` 只证明 durable enqueue；wake/nudge 是 best-effort，`scripts/inbox-loop.py` 从不叫醒 agent。`nohup` 加一个活着的收件进程不是唤醒。停在 §3 适用的那一档：有已确认通知时，阻塞 `check --wait` 的返回**就是**唤醒（它接受较长的 `--timeout-ms`，每 15 秒打印一次 keepalive）；没有通知时保持 turn 有界等待，或在结束 turn 前记录无法自动唤醒的状态 |
+| 唤醒 | worker_done 已在盘上或队列里，但协调者的 turn 早已结束、没有东西起新 turn：delivery 文件比你上一次 turn 更新，或 `NEW-MESSAGE` 早已过期，而 §3 的唤醒方式从未被确认 | `send` 成功只证明 durable enqueue；wake/nudge 是 best-effort。先确认自己处在 §3 哪一档：harness 能呈现作业完成时，收件器的结束——§3.1 那行唤醒——**就是**唤醒；若它始终没来，核对收件器是否按 §3.2 装的（而不是 `nohup`），以及上一次唤醒后是否装回了下一次等待（§3.4）。没有这种 harness 就停在 §3.3 的有界档，或在结束 turn 前记录无法自动唤醒的状态。绝不能把「进程还活着」当成「我会被叫醒」 |
 | FIFO 头部未 ack | 早先消息正常，之后的 worker_done 再不出现，批次头部压着一条未回答的提问或决策 | `check` 返回 Run 下**最老未 ack** 的 Delivery，并一直重放这一批直到 `--ack`，所以一批没 ack 就挡住它后面的一切。整批处理完再 ack 该快照的 `deliveryId`（§2 第 3 条）。人类决策堵住头部时，用只读 `check --all` 读后续消息（§2 第 4 条）；`--all` 从不出产可 ack 的 ID。ack 不是回复 |
 | 身份/邮箱 | 哪个收件箱都收不到，或消息落在你没在看的地方 | `check` 用 `--terminal <handle>` 认调用方且不接受 `--from`；从终端标题、"最新终端"或别的会话/Run 拿来的 handle 指向错误邮箱。handle 取自真实调用方身份（`orca status --json`）并写入台账。worker_done/heartbeat 不能发组地址，其 sender handle 必须精确等于 dispatch assignee，否则该任务永不结算 |
-| 收件器已死 | 彻底安静（连心跳也没有）：`--status` 报 DEAD 或 `phase=error`，或 `watch.log` 有 `ERROR` 行 | 脚本刻意把 CLI 失败、JSON 错误与绑定丢失落盘并非零退出，一次停止从不等价于空队列。waiter 槽是跨目录资源：app 重启、第二个实例或别的 Run 的 loop 都可能占走你需要的槽。起新 loop 前先确认并停掉旧 loop，绝不迁移旧状态目录 |
+| 收件器已死 | 彻底安静（连心跳也没有）：`--status` 报 DEAD 且 `phase=error`、或 `watch.log` 有 `ERROR` 行；或收到的唤醒行 `reason=error` | 脚本刻意把 CLI 失败、JSON 错误与绑定丢失落盘并非零退出，一次停止从不等价于空队列——而且那次停止本身就是一次唤醒（§3.1）。判死看 `state.json`，不要只看 pid 文件（§1）。读 `ERROR` 行与 `detail`；绑定/waiter 问题通常意味着别的实例或别的 Run 的 loop 占走了槽。在重新下发任何东西之前，先按 CLI 自己给出的恢复指引走：`runtime_unavailable` 错误会附带 `request-show --request <id>` 指引，而那次改动可能已经生效；用 `request-show` 确认、再用 `--retry-request <id>` 重放，而不是当成一次全新尝试。收件器自己从不重试。waiter 槽是跨目录资源：起新 loop 前先确认并停掉旧 loop，绝不迁移旧状态目录 |
 | worker 压根没发 | 只收到心跳，或收到声称成功的 plain final；被自动 ack 的纯心跳批次看着有流量，实际什么也没报 | 把 §4 的通信契约写进 spec，并按 5.3 分类 |
 
 ### 5.2 三处同查，不能只看一处
@@ -105,7 +226,8 @@ liveness.reason，并对相关 Dispatch 读取 worker-show/worker-read。检查�
 报告缺失或 worker 像失联时，把这三处一起读；任何单独一处都可能显得空，或在并不健康时显得健康：
 
 1. **本地**：`--status` 看 `loop`/`phase`；枚举**全部** `deliveries/*.json`，而不是只信
-   `NEW-MESSAGE`（它只提示最近落盘的批次，不是待办清单）；读 `watch.log` 的 `ERROR` 行。
+   `NEW-MESSAGE`（它只提示最近落盘的批次，不是待办清单）；读 `watch.log` 的 `ERROR` 行，
+   以及 `state.json` 里 `phase=wake` 的原因——那是上一次安装结束的缘由。
 2. **服务端队列**：只读 `check --run <run_id> --terminal <handle> --all --json`。
 3. **worker 状态**：`worker-list --include-remote --json`（有分页须读完），再对相关 Dispatch
    读 `worker-show` 与 `worker-read`——`projection.attention.requiresAction`、字面
@@ -132,5 +254,6 @@ liveness.reason，并对相关 Dispatch 读取 worker-show/worker-read。检查�
 完成报告、验收和合并分别记录。release 仅在真实结算且产物已持久化后按生命周期协议执行；
 已结算但待验收/合并的终端不得静默遗留，需在台账保留明确的下一步与处理期限。
 所有预期 Dispatch 处理完且台账无待办后，停止本 Run 的收件器（读取本目录的 loop PID，
-先确认进程身份再 SIGTERM）；脚本会回收自己的 CLI 子进程。nohup 不会随会话结束自动退出。
-持久审计报告保存关键回执和结论后，才考虑清理临时消息文件。
+先确认进程身份再 SIGTERM）；脚本会回收自己的 CLI 子进程。已经因唤醒而退出的收件器无需收尾——
+不要再装任何东西，把 `state.json` 留作记录。持久审计报告保存关键回执和结论后，才考虑清理
+临时消息文件。

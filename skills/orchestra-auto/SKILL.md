@@ -37,7 +37,7 @@ role boundaries §2, and dispatch parameters §4. It does **not** depend on the 
 
 ```text
 user input → §1 pin the delivery endpoint and channel → §2 hard-rule self-check → §4 dispatch a worker if edits are needed
-              → §4.5 collect messages in the background, make progress in the foreground (never idle-wait)
+              → §4.5 keep the inbox consumer installed (its end is the wake); make progress in the foreground
               ⇄ §5 answer (decisions go to the human) → §6 gate acceptance
               → send back or advance → after the project PR passes G-merge, §6.5 auto-merge → teardown
               (worker-release, reclaimable drained) → §7 closing report; stop at the agreed delivery endpoint
@@ -53,7 +53,7 @@ constraints. Each reference states its own trigger in its opening lines:
 | `references/spec-contract.md` | When writing a worker's spec, on any channel and for any ticket type |
 | `references/reply-protocol.md` | When classifying or answering a worker question, or deciding whether to escalate vs auto-answer |
 | `references/gate-acceptance.md` | When a ticket closes and you pick a gate; when merging a project PR or settling a worker |
-| `references/inbox-and-waiting.md` | Before each Run's first dispatch (identity binding, inbox, wakeups, lost-contact recovery); later dispatches only verify the inbox is still active; also when a worker's message never shows up |
+| `references/inbox-and-waiting.md` | Before each Run's first dispatch (identity binding, inbox, installing the wake and its switches, lost-contact recovery); after every wake, to install the next wait; also when a worker's message never shows up |
 | `references/worker-start-and-recovery.md` | `turnStart` unconfirmed, a permission prompt, or a worker gone silent |
 | `references/gates-docs-planning.md` | This ticket is a design / spec / ticket-splitting ticket heading for G-docs / G-wayfinder / G-spec / G-tickets |
 | `references/reformat-noise-recovery.md` | §4.0.1 finds tens of thousands of lines of uncommitted change (formatter reflow noise) |
@@ -213,11 +213,13 @@ something it will not do.
 ### 4.5 Communication loop
 
 Read [communication and recovery](references/inbox-and-waiting.md) before dispatching: one inbox
-consumer per Run before the first worker starts, a ledger outside the repository, dedupe by message
-ID with ack only after the whole batch, and a ≤60-second foreground wait with evidence-based
-recovery after three no-progress rounds. Ending a turn with work still in flight needs a
-**confirmed** wakeup mechanism — an unverified background process, a message file, or a successful
-`send` does not count. Detail: [dispatch loop](references/dispatch-loop.md).
+consumer per Run, a ledger outside the repository, dedupe by message ID with ack only after the
+whole batch, and the part that keeps it alive — the consumer **ends on a wake event**, so its end
+is what starts your next turn. Install it as a long call the harness surfaces (§3 there), never as
+`nohup`, and after every wake handle the batch and install the next wait: a wake with no new wait
+behind it is a silent stall. Without a job-completion channel, keep the turn in ≤60-second waits
+with evidence-based recovery after three no-progress rounds. Detail:
+[dispatch loop](references/dispatch-loop.md).
 
 ## 5. Reply protocol: decisions go to the human, details are answered for them
 

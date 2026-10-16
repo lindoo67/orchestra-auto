@@ -58,6 +58,19 @@ cases:
       - "WHO_DECIDES is human (not coordinator auto-answer)."
       - "WHY treats this as an irreversible / live-data escalation even if the worker claims it is reversible."
 
+  - name: wake_then_reinstall
+    description: "The wake is the consumer ending, and every wake is followed by a new wait."
+    prompt: |
+      Workers are running for this Run and the inbox has been quiet for a while.
+      Output ONLY:
+      1. WAKE_SOURCE
+      2. AFTER_WAKE — what you do the moment it fires
+      3. STALL_RISK — one sentence
+    expectations:
+      - "WAKE_SOURCE is the inbox consumer ending with its single stdout line, not a file appearing and not a live background process."
+      - "AFTER_WAKE handles the batch and then installs the next wait."
+      - "STALL_RISK says that a wake with no new wait behind it leaves the Run with no listener."
+
   - name: channel_discussion_stops
     description: "Pure discussion stays on channel A and does not dispatch."
     prompt: |

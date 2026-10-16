@@ -76,9 +76,12 @@ real Orca state first; never guess identity from an old conversation.
 
 - Prepare a single inbox consumer and a waiting method before the first worker starts; after
   every dispatch confirm the turn started and check the consumer.
-- One background consumer per Run, bound to the real coordinator handle; messages are saved
+- One consumer per Run, bound to the real coordinator handle; messages are saved
   atomically by deliveryId, a restart never overwrites, and unhandled evidence is never rotated
-  away. The script provides no agent-wakeup ability.
+  away. The consumer is also the wake: it ends the process, with one line on stdout, when a new
+  non-heartbeat batch or a worker-state change arrives (§3 of
+  [inbox and waiting](inbox-and-waiting.md)), so install it as a call the harness surfaces and
+  install it again after every wake.
 - Deduplicate every message by message ID and verify its Run/Task/Dispatch. Acknowledge only
   after the whole batch and any needed terminal-ownership decisions are handled. When the
   current batch is blocked on a human decision, use a read-only `check --all` to inspect

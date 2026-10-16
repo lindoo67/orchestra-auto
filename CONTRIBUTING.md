@@ -57,8 +57,14 @@ the tests exist, and a change that weakens one needs a very good argument:
 - a CLI error exits non-zero and is reported, and is never reinterpreted as an empty queue;
 - one consumer per state directory, enforced by a file lock.
 
-Do not add an agent-wakeup mechanism to the script. It persists messages; waking the coordinator is
-a separate concern, and the design deliberately keeps them apart.
+The script also owns the wake contract, because a file on disk cannot start a coordinator turn:
+it **ends the process** and prints one machine-readable line on stdout when a newly persisted
+non-heartbeat batch arrives, when this Run's worker signature changes, or when the loop itself
+fails (a non-zero exit is the third leg). That line's fields and the exit codes are a published
+contract — `references/inbox-and-waiting.md` §3 defines them and the tests assert them — so
+changing either is the same kind of change as weakening the list above. A batch that is already on
+disk is deliberately **not** a wake: it is the coordinator's outstanding duty, and waking for it on
+every install would spin instead of waiting for the next message.
 
 ### If you change a SKILL.md or a reference
 

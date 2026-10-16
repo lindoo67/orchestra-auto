@@ -129,13 +129,15 @@ python3 -m unittest discover -s tests -v
 
 - `tests/test_inbox_loop.py` 用一个桩 CLI 驱动真实的收件脚本，断言那些安全关键行为：原子落盘、
   重读时内容完整、重复 delivery 不覆盖首次读取、只有 heartbeat 的批次才 ack（普通批次与混合
-  批次不 ack）、CLI 错误显式失败而不是伪装成空队列、以及单消费者文件锁。
+  批次不 ack）、CLI 错误显式失败而不是伪装成空队列、以及单消费者文件锁。它还钉住唤醒契约——
+  新落盘的非心跳批次要以一行可解析 stdout 结束进程，纯心跳批次不能，worker 状态变化要——并覆盖
+  原生 `check --wait` 路径、其 stderr keepalive，以及超时后重新装上等待。
 - `tests/test_package_content.py` 检查包本身：两个语言变体结构一致、frontmatter 合法且 `name`
   与目录一致、所有相对链接可解析、随包发布的每个 reference 都可达并声明了自己的触发条件、
   eval JSON 的形状与唯一性、`eval.yaml` 白名单、Python 的 `py_compile`、shell wrapper 的
   `bash -n`、MIT 许可，以及脱敏扫描。
 
-已记录结果为 **58 OK（1 skipped）**。这是主要的结构与行为门禁。
+已记录结果为 **78 OK（1 skipped）**。这是主要的结构与行为门禁。
 
 想单独跑某一条也可以：
 
@@ -193,8 +195,8 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 
 ## 评估集
 
-每个语言变体都带一份 `evals/evals.json`，19 个提示词层面的场景，覆盖通道判定、worker 栏取值、
-启动确认、门禁选择、review 安排、打回判断、决策分类、升级与合并例外。
+每个语言变体都带一份 `evals/evals.json`，20 个提示词层面的场景，覆盖通道判定、worker 栏取值、
+启动确认、门禁选择、review 安排、打回判断、决策分类、升级、合并例外，以及「先唤醒、再重装」的契约。
 
 这些是**场景检查，不是端到端证明**：它们看的是一个读过本 skill 的 agent 是否按 skill 的意图推理，
 并不证明编排在真实 Orca 主机上能跑通——那是脚本行为测试和真实使用的事。每份文件都在 `_note`
