@@ -417,7 +417,7 @@
     {
       "id": 12,
       "name": "read-setting-before-declare",
-      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「board 卡片那个空状态加个插画，占位高度 120px，别的别动。」\n\n（这句里没有提到任何 agent / worker / harness 的名字。）\n\n请使用题目给定的设置夹具（不要查询本机设置、不要跑命令或派 worker），只输出：\n1. RESOLVE: 按夹具应选的 worker 及理由\n2. OUTPUT: 你的模式声明（六栏齐全）\n\n请严格按这 2 个标签输出，每条都要有具体值。",
+      "prompt": "你正在跑 orchestra-auto。用户这一轮的原话是：\n\n「board 卡片那个空状态加个插画，占位高度 120px，别的别动。」\n\n（这句里没有提到任何 agent / worker / harness 的名字。）\n\n评估设置夹具（这是本题的权威实时值，请直接按夹具回答，不依赖本机设置，也无需跑命令）：\nLIVE_DEFAULT_TUI_AGENT=fixture-agent\nDISABLED_TUI_AGENTS=[]\nSTALE_EXPORT_DEFAULT=old-agent（已过期且不可用，不要使用）。\n\n请使用题目给定的设置夹具（不要查询本机设置、不要跑命令或派 worker），只输出：\n1. RESOLVE: 按夹具应选的 worker 及理由\n2. OUTPUT: 你的模式声明（六栏齐全）\n\n请严格按这 2 个标签输出，每条都要有具体值。",
       "expected_output": "RESOLVE 按夹具 LIVE_DEFAULT_TUI_AGENT 选择 fixture-agent，无需查询本机。OUTPUT 六栏齐全且 worker=fixture-agent，没有占位符。",
       "files": [],
       "assertions": [

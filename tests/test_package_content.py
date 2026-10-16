@@ -447,6 +447,30 @@ class EvalMetadataTests(unittest.TestCase):
             "the two variants must carry the same number of assertions per scenario",
         )
 
+    def test_variants_carry_the_same_fixture_values(self):
+        """A scenario's fixture block is untranslatable, so it must survive translation.
+
+        Case 12's Chinese prompt once dropped the ``LIVE_DEFAULT_TUI_AGENT`` block its English
+        sibling carried while its assertions still demanded that value, which made the scenario
+        unanswerable and produced a failure that looked like a skill defect. The prose may differ
+        between variants; the fixture values and the upper-case tokens a scenario supplies may not.
+        """
+        english = json.loads((SKILL_DIRS[0] / "evals" / "evals.json").read_text())["evals"]
+        chinese = json.loads((SKILL_DIRS[1] / "evals" / "evals.json").read_text())["evals"]
+        fixture = re.compile(r"\b([A-Z][A-Z0-9_]{3,})=([A-Za-z0-9_.\-\[\]]+)")
+        token = re.compile(r"\b[A-Z][A-Z0-9_]{4,}\b")
+        for en_entry, zh_entry in zip(english, chinese, strict=True):
+            self.assertEqual(
+                set(fixture.findall(en_entry["prompt"])),
+                set(fixture.findall(zh_entry["prompt"])),
+                f"{en_entry['name']}: the fixture values differ between variants",
+            )
+            self.assertEqual(
+                set(token.findall(en_entry["prompt"])),
+                set(token.findall(zh_entry["prompt"])),
+                f"{en_entry['name']}: the variants supply different upper-case tokens",
+            )
+
     def test_eval_scenarios_are_machine_independent(self):
         """No scenario may bake in a home path or a private host detail."""
         forbidden = ("/Users/", "/home/", "profile-state.db", "orca-data.json")
