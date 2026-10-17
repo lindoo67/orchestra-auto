@@ -25,9 +25,9 @@ Read [README.zh-CN.md](README.zh-CN.md) for the Chinese version of this document
 
 Dispatch is easy; the last 20% is the hard part — supervised Orca orchestration skills.
 
-[![Demo video](docs/demo/orchestra-auto-poster.jpg)](https://github.com/whutlichao/orchestra-auto/releases/download/demo-video/orchestra-auto.mp4)
+<video src="https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6" controls width="720" poster="docs/demo/orchestra-auto-poster.jpg"></video>
 
-[Watch the demo (MP4)](https://github.com/whutlichao/orchestra-auto/releases/download/demo-video/orchestra-auto.mp4)
+[Watch the demo (MP4)](https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6)
 
 ## The chain is his
 
