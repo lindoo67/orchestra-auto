@@ -33,10 +33,10 @@ Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背�
 
 ```mermaid
 flowchart TB
-  G[grill-with-docs] --> S[to-spec] --> T[to-tickets]
-  T --> I[implement]
-  T --> IS[implement-spec]
-  I --> CR[code-review]
+  G["grill-with-docs<br/>追问到说清"] --> S["to-spec<br/>收成 spec"] --> T["to-tickets<br/>拆成带阻塞的票"]
+  T --> I["implement<br/>做一张已定的票"]
+  T --> IS["implement-spec<br/>整张图做完"]
+  I --> CR["code-review<br/>审这次 diff"]
   IS --> CR
   CR --> SP["<br/><br/><br/><br/><br/><br/><br/><br/>"]
   classDef matt fill:#e8f7ee,stroke:#1f9254,color:#08281a
@@ -61,9 +61,9 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  U["你说要做什么"] --> C["选中链上的一格"] --> W["新 worktree 里跑"] --> GA["按票型过门禁"] --> D{"决策或单向门？"}
-  D -->|是| H["问你"]
-  D -->|否| M["合并，同步 main"]
+  U["你说要做什么<br/>You say what you want"] --> C["选中链上的一格<br/>Pick one step on his chain"] --> W["新 worktree 里跑<br/>Run it in a new worktree"] --> GA["按票型过门禁<br/>Gate for that ticket type"] --> D{"决策或单向门？<br/>Decision or one-way door?"}
+  D -->|是 yes| H["问你<br/>Ask you"]
+  D -->|否 no| M["合并，同步 main<br/>Merge and sync main"]
   H --> SP["<br/><br/><br/><br/><br/><br/><br/><br/>"]
   M --> SP
   classDef orca fill:#eef4ff,stroke:#4b74d8,color:#101828
