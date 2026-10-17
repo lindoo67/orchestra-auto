@@ -47,7 +47,10 @@ sqlite3 -readonly "$STATE_DB" \
 - [ ] **spec 五要素齐**：Target / Change / Constraints / Ownership / Observable acceptance，
       且开头两段是 BEHAVIOR RULE 与前置 skill 绝对路径（§4.4）。
 - [ ] **worktree 参数对**：`--worktree new-top-level` + `--name <票 slug>` + `--agent <§0 的 worker>`；
+      长程票图用 `--name <feature>-integration`，只派一个 worker；
       会话 cwd 与目标 repo 不一致时已加 `--repo <selector>`（§4.3）。
+- [ ] **长程票图确实就绪**：一个集成 PR、`implement-spec` 作为前置 skill、票图完整、tracker 可达；
+      worker 的首次报告证明嵌套 worktree 隔离，或记录串行降级（见长程票图参考）。
 - [ ] **main 铁律自检真的过了一遍**（§2）：本轮不会在 main 工作区修改项目文件或创建提交；仅 §6.5.1 已合并成果的快进同步可更新主分支。
 - [ ] **票据正本位置明确**：正本在任务 worktree 内，worker 负责 Status 流转与 Answer 追加；
       coordinator 在 main 上只读验收（§4.4）。
@@ -56,7 +59,8 @@ sqlite3 -readonly "$STATE_DB" \
       ① 按 §6 G-impl 第 1 条选定测试档（窄/宽），若选「窄」已能说出为何影响面可圈定；
       ② 若本票要省双轴 review，已按 §3 的可数判据确认并写明理由。
       **机械判定法**：实施票 spec 的 `Observable acceptance` 里必须**逐字出现 `code-review`**
-      （连同「双轴 / Standards + Spec」字样），除非按 §3 省掉。跑一句
+      （连同「双轴 / Standards + Spec」字样），除非按 §3 省掉。长程票图写「integration branch
+      上的一次双轴 code-review」加逐票 TDD，不得再要求逐票双轴 review。跑一句
       `grep -c 'code-review' <spec>`，得 0 就是没写、不许 dispatch。
       常见故障：一轮实施票的 spec 全文 `review-mentions=0`，因为它们的前置 skill 指向
       `implement`（其正文写着要用 `/code-review`），我据此以为「worker 会自己做」——

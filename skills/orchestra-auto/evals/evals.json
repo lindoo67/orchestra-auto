@@ -1,41 +1,41 @@
 {
   "skill_name": "orchestra-auto",
-  "_note": "Scenario evaluations exercise routing, auto-merge authorization and gate choices. They are prompt-level checks: they show whether an agent that has read the skill reasons the way the skill intends, and they are NOT end-to-end proof that orchestration works. Script behaviour is tested separately by the repository's fake-CLI integration test. Every scenario is machine-independent: no absolute home path, no private repository or ticket name, no local agent preference, and no snapshot of a particular host's settings is assumed.",
+  "_note": "Scenario evaluations exercise routing, auto-merge authorization, door routing, long-horizon ticket maps and gate choices. They are prompt-level checks: they show whether an agent that has read the skill reasons the way the skill intends, and they are NOT end-to-end proof that orchestration works. Script behaviour is tested separately by the repository's fake-CLI integration test. Every scenario is machine-independent: no absolute home path, no private repository or ticket name, no local agent preference, and no snapshot of a particular host's settings is assumed.",
   "evals": [
     {
       "id": 0,
       "name": "multiticket-review",
-      "prompt": "You are running orchestra-auto. The requirements have already been through grill and to-spec, and you now hold 5 open implementation tickets (all on the same GitHub issue tracker, blocking edges declared, 3 of them independent and parallelizable). The change spans one backend file, two frontend component files and tests.\n\nOutput only your execution plan: do not actually dispatch a worker and do not run any command. Use this structure:\n\n1. REVIEW_HANDLING: how you intend to arrange the two-axis code review (at which step, how many times, done by whom)\n2. SPEC_ACCEPTANCE: what items each ticket's Observable acceptance section will contain (list them)\n3. DISPATCH_ORDER: the dispatch order\n4. WHY: in 3-5 sentences, why you arrange the review this way\n\nOutput exactly those 4 labels, each with concrete content.",
-      "expected_output": "Each ticket passes the two-axis review inside its own G-impl gate (5 times, travelling with the ticket) rather than pooling one review after the merge; the spec's Observable acceptance lists the two-axis code-review section explicitly; the reason given is that an inconsistency within one ticket is easier to see in a small diff and the rework is cheaper.",
+      "prompt": "You are running orchestra-auto. The requirements have already been through grill and to-spec, and you now hold 5 open implementation tickets (all on the same GitHub issue tracker, blocking edges declared, 3 of them independent and parallelizable). The change spans one backend file, two frontend component files and tests.\n\nOutput only your execution plan: do not actually dispatch a worker and do not run any command. Use this structure:\n\n1. ENTRY: which skill or handoff you use for the whole map\n2. TOPOLOGY: who spawns implementers, where each works, and how branches merge\n3. REVIEW: where the one two-axis code review happens, and what per-ticket evidence replaces it\n4. PR_AND_DOOR: PR granularity and the merge route for two-way vs one-way\n5. WHY: in 3-5 sentences, why this topology is the right one\n\nOutput exactly those 5 labels, each with concrete content.",
+      "expected_output": "One long-horizon worker runs `implement-spec` on the map: implementers each take a frontier ticket in their own worktree and branch cut from the integration branch, use TDD, and merge the integration tip before reporting; a merger step lands them in DAG order. The map produces one integration PR, not five PRs. The one two-axis code review runs on the integration branch after all tickets; per-ticket TDD plus the documented spot-check replaces per-ticket reviews. The PR body uses the `pr` skill; a two-way door auto-merges only after G-merge, and a one-way door stays open for a human. WHY justifies the single integration PR and the frontier-based concurrency.",
       "files": [],
       "assertions": [
         {
-          "text": "REVIEW_HANDLING schedules a two-axis review for EACH of the 5 tickets (per-ticket), not one pooled review",
-          "name": "review_per_ticket"
+          "text": "ENTRY dispatches one long-horizon worker that uses implement-spec for the whole map, not five per-ticket workers",
+          "name": "long_horizon_worker"
         },
         {
-          "text": "REVIEW_HANDLING does NOT say the review can be deferred to after all tickets merge (no 'after all' / 'once at the end' as the primary plan)",
-          "name": "review_not_deferred"
+          "text": "TOPOLOGY gives each implementer its own worktree and branch cut from the integration branch",
+          "name": "per_ticket_worktrees"
         },
         {
-          "text": "review is placed inside the per-ticket G-impl gate (or the ticket's Answer), not only in the final closing report",
-          "name": "review_in_gate"
+          "text": "TOPOLOGY merges implementer branches into the integration branch in DAG order (merger step or worker)",
+          "name": "dag_merge"
         },
         {
-          "text": "SPEC_ACCEPTANCE explicitly lists the two-axis code-review section (Standards + Spec) as an acceptance item",
-          "name": "acceptance_has_review"
+          "text": "PR_AND_DOOR produces one integration PR for the map, not one PR per ticket",
+          "name": "one_integration_pr"
         },
         {
-          "text": "SPEC_ACCEPTANCE lists red->green TDD evidence",
-          "name": "acceptance_has_redgreen"
+          "text": "REVIEW runs one two-axis code review on the integration branch after the tickets, not a per-ticket review",
+          "name": "integration_review_once"
         },
         {
-          "text": "SPEC_ACCEPTANCE mentions typecheck/lint zero-new-issues (or the repo's format gate)",
-          "name": "acceptance_has_format"
+          "text": "REVIEW or acceptance keeps per-ticket TDD evidence and a coordinator spot-check rather than a per-ticket two-axis review",
+          "name": "tdd_and_spotcheck"
         },
         {
-          "text": "WHY justifies per-ticket review by the small-diff/lower-rework-cost argument rather than only 'it is required'",
-          "name": "why_cites_small_diff"
+          "text": "PR_AND_DOOR auto-merges a two-way door only after G-merge and leaves a one-way door open for a human",
+          "name": "door_routing"
         }
       ]
     },
@@ -472,21 +472,25 @@
     {
       "id": 15,
       "name": "integration_before_merge",
-      "prompt": "Three parallel implementation tickets each have an OPEN PR and the user has explicitly authorized merging. Each ticket's own tests pass; the cross-ticket full suite is very slow. Explain the testing, the merge order and the failure handling.",
-      "expected_output": "Compose the final heads in an isolated integration worktree in the intended merge method and DAG order, record the SHAs, and run the applicable full validation before merging; if the composition fails, fix the PR -- do not put the first full run after the merge.",
+      "prompt": "One spec has been split into three tickets with declared blocking edges. A single long-horizon worker is using implement-spec and will open one integration PR. Two tickets are ready now; the third is blocked by one of them. The full suite is slow. Explain the merge order, the final verification, and the failure handling. Do not execute.",
+      "expected_output": "Start the two ready implementers in parallel from the integration branch; merge them in DAG order as they finish; start the third only after its blocker is merged into the integration branch. Rebase the integration branch on the current base, run the applicable full suite on the final head, and open one integration PR. A failing merge or test blocks the PR and goes back to the worker; do not postpone the first full run until after merge.",
       "files": [],
       "assertions": [
         {
-          "name": "premerge_full",
-          "text": "Runs applicable full integration validation before merging"
+          "name": "frontier_parallel",
+          "text": "Starts the two ready tickets in parallel from the frontier"
         },
         {
-          "name": "records_heads",
-          "text": "Records final head and base identities"
+          "name": "blocker_gates_third",
+          "text": "Starts the third ticket only after its blocker is merged into the integration branch"
         },
         {
-          "name": "failure_blocks_merge",
-          "text": "A failing integration gate blocks merges rather than discovering it only after merge"
+          "name": "premerge_full_on_integration",
+          "text": "Runs the applicable full validation on the final integration head before merge"
+        },
+        {
+          "name": "one_integration_pr",
+          "text": "Produces one integration PR for the three tickets, not three PRs"
         }
       ]
     },
@@ -514,21 +518,25 @@
     {
       "id": 17,
       "name": "standing_auto_merge",
-      "prompt": "The user says: \"Fix this export button and give me a PR.\" In this session the user has already said explicitly that from now on they want PRs committed and merged automatically, without confirming each one. List the actions from the worker finishing to the close-out, plus the stop conditions. Do not execute.",
-      "expected_output": "The worker commits, pushes and opens the PR; the coordinator accepts it independently, passes G-merge, and once the gates are green and the repository allows it merges automatically, syncs the main branch, tears down the worker and reports. The merge no longer needs a separate user confirmation; when a gate fails or repository rules block it, preserve the scene and report.",
+      "prompt": "The user says: \"Fix this export button and give me a PR.\" In this session the user has already said explicitly that from now on they want PRs committed and merged automatically, without confirming each one. The diff is a reversible UI-only change. List the actions from the worker finishing to the close-out, plus the stop conditions. Do not execute.",
+      "expected_output": "The worker commits, pushes and opens the PR with the pr skill; the body states Door: two-way and the evidence. The coordinator accepts it independently, verifies the door claim against the diff, passes G-merge, and once the gates are green and the repository allows it merges automatically, syncs the main branch, tears down the worker and reports. The merge no longer needs a separate user confirmation; when the gate fails, the door is one-way or uncertain, or repository rules block it, preserve the scene and report.",
       "files": [],
       "assertions": [
         {
           "name": "merge_without_reconfirmation",
-          "text": "Merges an accepted PR without asking for another approval"
+          "text": "Merges an accepted two-way PR without asking for another approval"
         },
         {
           "name": "gate_before_merge",
           "text": "Runs the acceptance and merge gates before merging"
         },
         {
+          "name": "door_verified",
+          "text": "Verifies the Door claim against the diff rather than trusting the worker's label"
+        },
+        {
           "name": "blocked_state_report",
-          "text": "Does not claim completion when gates or repository rules block merging"
+          "text": "Does not claim completion when a gate, a one-way door or repository rules block merging"
         }
       ]
     },
@@ -567,6 +575,182 @@
         {
           "name": "already_saved_head_stays_quiet",
           "text": "Does not treat a batch that is already on disk as a new wake"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "ticket_map_ready_uses_implement_spec",
+      "prompt": "You are running orchestra-auto. A spec and five implementation tickets are on the GitHub tracker; every ticket has acceptance criteria, every blocker references an existing ticket, the graph is acyclic, and two tickets are ready. The user asked to implement the whole map. Output only:\n1. ENTRY\n2. DISPATCH\n3. ACCEPTANCE\n4. WHY\nDo not execute.",
+      "expected_output": "Use one long-horizon worker with implement-spec for the whole map; the worker starts implementers for the two ready tickets and follows the frontier. Do not dispatch five per-ticket Orca workers. Expect one integration PR, accepted once after the final head passes the full gate, with per-ticket TDD and a final integration code-review.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_implement_spec",
+          "text": "ENTRY uses implement-spec for the complete map"
+        },
+        {
+          "name": "one_worker_for_map",
+          "text": "DISPATCH starts one long-horizon worker, not one worker per ticket"
+        },
+        {
+          "name": "frontier_start",
+          "text": "Starts the two ready tickets and follows the frontier"
+        },
+        {
+          "name": "one_integration_pr",
+          "text": "ACCEPTANCE expects one integration PR, not per-ticket PRs"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "incomplete_ticket_map_blocks_implement_spec",
+      "prompt": "You are running orchestra-auto. A ticket map has a cycle between tickets 03 and 04, and ticket 05 has no acceptance criteria. The user asks to start implementation now. Output only:\n1. ENTRY\n2. ACTION\n3. WHY\nDo not execute.",
+      "expected_output": "Do not dispatch implement-spec. Send the map back to to-tickets / G-tickets, name the cycle and the missing acceptance criteria, and start only after the map is complete.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "blocks_dispatch",
+          "text": "Does not dispatch implement-spec for the incomplete map"
+        },
+        {
+          "name": "returns_to_to_tickets",
+          "text": "Sends the map back to to-tickets or G-tickets"
+        },
+        {
+          "name": "names_specific_defects",
+          "text": "Names the 03-04 cycle and ticket 05's missing acceptance criteria"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "one_way_door_requires_human_merge",
+      "prompt": "You are running orchestra-auto. The integration PR adds a database migration that drops a column and rewrites rows; the PR body says Door: two-way. The user earlier authorized automatic merging. Output only:\n1. DOOR\n2. MERGE\n3. WHY\nDo not execute.",
+      "expected_output": "Classify the PR as one-way because of the destructive migration, overriding the body's two-way label. Do not auto-merge; leave the PR open, report the door evidence and the exact human merge action. The earlier general auto-merge authorization does not cover a one-way door.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "classifies_one_way",
+          "text": "Classifies the migration PR as one-way"
+        },
+        {
+          "name": "overrides_two_way_claim",
+          "text": "Rejects the body's two-way label because the diff has a one-way trigger"
+        },
+        {
+          "name": "no_auto_merge",
+          "text": "Does not auto-merge despite the earlier general authorization"
+        },
+        {
+          "name": "human_merge_action",
+          "text": "Leaves the PR open and reports the human merge action"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "door_claim_conflict_conservative",
+      "prompt": "You are running orchestra-auto. A worker's PR body says Door: two-way, but the diff adds a public CLI flag and changes a persisted JSON schema. Output only:\n1. DOOR\n2. ACTION\n3. WHY\nDo not execute.",
+      "expected_output": "Treat the PR as one-way, send it back to the worker to correct the body, then leave it open for a human merge. A claim contradicted by the diff is resolved conservatively as one-way.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "one_way",
+          "text": "Classifies the PR as one-way"
+        },
+        {
+          "name": "send_back_body",
+          "text": "Sends it back to correct the Merge Danger body"
+        },
+        {
+          "name": "no_auto_merge",
+          "text": "Does not auto-merge the conflicting claim"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "retro_candidates_need_human_selection",
+      "prompt": "You are running orchestra-auto. A worker bypassed the role boundary and edited main directly; the run was stopped. You have the session and worker transcripts. Output only:\n1. NEXT\n2. CANDIDATES\n3. LANDING\nDo not execute.",
+      "expected_output": "Run retro read-only on the process error, save a severity-ordered candidate list outside the target repository, and present it to the human. Do not auto-edit the skill. After the human selects candidates, dispatch a worker to land them under the normal gates, with an eval case per accepted candidate.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "runs_retro",
+          "text": "Runs retro on the process error rather than treating it as a product bug"
+        },
+        {
+          "name": "candidates_outside_repo",
+          "text": "Saves the candidate list outside the target repository"
+        },
+        {
+          "name": "human_selects",
+          "text": "Presents candidates and waits for human selection"
+        },
+        {
+          "name": "no_auto_landing",
+          "text": "Does not auto-edit or auto-land the improvements"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "nested_worktree_fallback",
+      "prompt": "You are running orchestra-auto. A long-horizon worker reports it can run implementers but cannot create isolated worktrees or branches. Output only:\n1. DECISION\n2. WHY\n3. RECORD\nDo not execute.",
+      "expected_output": "Do not run parallel implementers in one worktree. Run them serially in the worker's own worktree, or fall back to the per-ticket Orca worker model; record the degradation in the ledger and report.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_shared_worktree",
+          "text": "Does not run parallel implementers in a shared worktree"
+        },
+        {
+          "name": "serial_or_fallback",
+          "text": "Chooses serial work or the per-ticket fallback"
+        },
+        {
+          "name": "records_degradation",
+          "text": "Records the degradation in the ledger and report"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "single_ticket_stays_channel_b",
+      "prompt": "You are running orchestra-auto. The user asks for one clearly bounded bug fix with an existing ticket; there is no ticket map. Output only:\n1. CHANNEL\n2. PATH\n3. WHY\nDo not execute.",
+      "expected_output": "Use channel B: one implementation worker in one worktree with a short spec. Do not wrap a single ticket in implement-spec; that path is for a complete map.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "channel_b",
+          "text": "Uses channel B for the single ticket"
+        },
+        {
+          "name": "no_implement_spec",
+          "text": "Does not use implement-spec for a single ticket"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "additive_api_is_two_way",
+      "prompt": "You are running orchestra-auto. The integration PR adds a new exported function `formatDate` to an existing library. No existing signature, stored format, deployment or external side effect changes. The PR body says Door: two-way. Output only:\n1. DOOR\n2. MERGE\n3. WHY\nDo not execute.",
+      "expected_output": "Treat the PR as two-way: an additive, backward-compatible API addition is cheap to revert and is not a one-way trigger. With G-merge green and the repository allowing it, auto-merge; a one-way door would still stop for a human.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "additive_api_two_way",
+          "text": "Classifies the additive API addition as two-way"
+        },
+        {
+          "name": "no_breaking_change",
+          "text": "Does not treat a purely additive function as a breaking public API change"
+        },
+        {
+          "name": "auto_merge_after_gate",
+          "text": "Auto-merges only after G-merge is green, not merely because the body says two-way"
         }
       ]
     }

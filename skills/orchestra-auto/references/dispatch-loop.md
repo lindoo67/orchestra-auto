@@ -66,6 +66,16 @@ with evidence that agent actually supports. Orca allows workers without a termin
 `worker-show` for the handle first, and never force `terminal show` onto a worker that has no
 terminal. If you cannot prove it, gather evidence per §9 rather than entering a blind wait.
 
+### 4.3.2 Long-horizon dispatch (one worker per map)
+
+When G-tickets accepted a complete map, start **one** worker for the whole map:
+`--name <feature>-integration`, with `implement-spec` as the pre-skill and the `Tracker:`,
+`Spec:`, `Tickets:` and `Integration branch:` pointers from
+[long-horizon tickets](long-horizon-tickets.md). It must prove it can create isolated nested
+worktrees before spending the map; if not, it runs implementers serially, or the coordinator falls
+back to one worker per ticket (default cap 3). The coordinator accepts the single integration PR,
+not each nested branch, and never enters a nested worktree.
+
 ## 4.5 Communication loop: enqueue, collect, handle and wake are verified separately
 
 Read the [communication and recovery protocol](inbox-and-waiting.md) before

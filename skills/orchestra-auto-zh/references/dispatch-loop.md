@@ -52,6 +52,13 @@ Orca 的这条默认**。
 并用该 agent 实际支持的证据确认开始。Orca 允许无终端 worker，先看 `worker-show` 的句柄，
 不能对无终端 worker 强行使用 `terminal show`。无法证实时按 §9 取证，不进入盲等。
 
+### 4.3.2 长程派活（一张票图一个 worker）
+
+G-tickets 验收完整票图后，为整张图启动 **一个** worker：`--name <feature>-integration`，
+spec 以前置 skill `implement-spec` 开头，并带 `Tracker：` / `Spec：` / `Tickets：` /
+`Integration branch：` 指针（见 [长程票图](long-horizon-tickets.md)）。它必须先证明能建隔离的
+嵌套 worktree，再花整张图；不能证明就串行跑 implementer，或由 coordinator 回退到逐票 worker
+（默认并发 3）。coordinator 只验收唯一的集成 PR，不逐票验收嵌套分支，也不进入嵌套 worktree。
 
 ### 4.5 通信闭环：入队、收件、处理、唤醒分别核验
 

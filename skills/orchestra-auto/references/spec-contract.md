@@ -63,6 +63,15 @@ Observable acceptance: <the applicable test commands and observable results; red
 Question channel: orchestration ask (AskUserQuestion is banned).
 ```
 
+For a long-horizon ticket map, `Pre-skill` is the absolute path to `implement-spec`. Add
+`Skill resolution:` (use the Skill tool for `tdd` / `code-review` when available, otherwise read
+their absolute paths), `PR skill:` (the absolute path to `pr`), `Tracker:`, `Spec:`, `Tickets:` and
+`Integration branch:`. The worker must report the graph and frontier, each ticket's branch and
+commit, the integration branch, the single integration PR, `Closes` links, and the Door claim with
+evidence. Nested decision-class questions go up through the top-level worker; the worker must not
+answer them on the human's behalf. Per-ticket TDD plus one `code-review` on the integration branch
+is this path's review model; do not also schedule a per-ticket two-axis review.
+
 **Ticket-type line: write the type and gates immediately after the pre-skill**:
 
 ```text

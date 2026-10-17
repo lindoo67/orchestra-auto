@@ -33,10 +33,10 @@ G-wayfinder.
 
 ### G-docs is not the end of the line
 
-A full implementation request normally runs `grill-with-docs → to-spec → to-tickets → implement`.
-G-docs accepts only the design stage; once the design file's PR passes G-merge and merges
-automatically, record the follow-up entry point and stop if this round asked only for design, or
-continue into to-spec and to-tickets if this round includes implementation. See SKILL.md §7.
+A full implementation request normally runs `grill-with-docs → to-spec → to-tickets →
+implement-spec`. G-docs accepts only the design stage; once the design file's PR passes G-merge and
+merges automatically, record the follow-up entry point and stop if this round asked only for design,
+or continue into to-spec and to-tickets if this round includes implementation. See SKILL.md §7.
 
 ---
 
@@ -98,16 +98,19 @@ leaning and let the human decide; record the answer in the audit list.
 - Every ticket is a vertical tracer bullet (cuts through all layers, independently verifiable, fits
   in a single context) with declared blocking edges; a wide refactor uses expand–contract rather
   than a hard cut.
-- Tickets are pushed to the remote first, and worktrees are cut from the default base ref.
-- **For dependent tickets, the downstream base waits until the upstream merges.** A downstream
-  ticket cut from the default base ref will be missing the upstream change (the interfaces will not
-  line up, so what gets written is red); cutting from the upstream branch instead introduces a
-  stacked-PR merge-order constraint. By default, cut the downstream ticket from the new base once
-  the upstream ticket lands; when the user explicitly asks to keep an open PR, follow the
-  repository's stacked-PR or dependent-branch policy and leave the upstream unmerged — frontier
-  semantics support that queueing naturally. Stacked PRs are an explicit exception (tight schedule,
-  short dependency chain); when used, write the stack order on the tickets, merge in stack order
-  per §6.5, and rebase the whole stack if any one of them rebases.
+- Tickets are published to the configured tracker first (remote issues or committed local files).
+  In the long-horizon path the worker cuts the integration branch from the default base, and each
+  implementer cuts from that integration branch; a downstream ticket waits only until its blockers
+  are merged into the integration branch, not until the whole map lands.
+- **Long-horizon entry check**: a spec pointer exists; every ticket has a title, What to build,
+  acceptance criteria and a status; every blocker references an existing ticket; the graph is
+  acyclic; at least one ticket is on the frontier; the tracker is reachable and local ticket files
+  are visible from a worktree; each ticket fits one fresh context. If any fails, send it back to
+  `to-tickets`; do not dispatch `implement-spec`.
+- In the per-ticket fallback, a downstream ticket cuts its base after the upstream PR merges.
+  Stacked PRs remain an explicit exception (tight schedule, short dependency chain); write the
+  stack order on the tickets, merge in stack order per §6.5, and rebase the whole stack if any one
+  of them rebases.
 
 **Splitting granularity is §5.1 criterion 3 (scope boundary)** and also goes to the human. When
 writing the splitting options, describe **the ticket count and what each ticket delivers** in

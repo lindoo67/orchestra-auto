@@ -83,3 +83,74 @@ cases:
       - "CHANNEL is A (discussion / verbal conclusion)."
       - "DISPATCH is no."
       - "STOP_WHEN says stop after delivering the discussion conclusion, without creating a worktree/PR/implement path."
+
+  - name: long_horizon_ticket_map
+    description: "A complete ticket map goes to one implement-spec worker and one integration PR."
+    prompt: |
+      You are coordinating an Orca orchestration. A spec and five implementation tickets are on
+      the tracker; the graph is acyclic, blockers are declared, and two tickets are ready.
+      Output ONLY:
+      1. ENTRY
+      2. DISPATCH
+      3. PR
+      4. REVIEW
+    expectations:
+      - "ENTRY uses implement-spec for the whole map."
+      - "DISPATCH starts one long-horizon worker, not one worker per ticket."
+      - "PR is one integration PR for the map."
+      - "REVIEW is one two-axis review on the integration branch, with per-ticket TDD evidence."
+
+  - name: one_way_door_stops
+    description: "A one-way integration PR is left open for a human merge."
+    prompt: |
+      The integration PR contains a destructive database migration and the body says Door: two-way.
+      The user earlier authorized automatic merging.
+      Output ONLY:
+      1. DOOR
+      2. MERGE
+      3. WHY
+    expectations:
+      - "DOOR is one-way, overriding the body's two-way claim."
+      - "MERGE is no auto-merge; leave the PR open for a human."
+      - "WHY says the earlier general authorization does not cover a one-way door."
+
+  - name: retro_candidate_gate
+    description: "Process errors produce retro candidates, not automatic skill edits."
+    prompt: |
+      A worker bypassed the role boundary and edited main. The run is stopped and transcripts exist.
+      Output ONLY:
+      1. NEXT
+      2. CANDIDATES
+      3. LANDING
+    expectations:
+      - "NEXT runs retro read-only on the process error."
+      - "CANDIDATES are saved outside the target repository and presented to the human."
+      - "LANDING waits for human selection, then uses a worker under the normal gates."
+
+  - name: nested_worktree_fallback
+    description: "No nested worktree isolation means serial work or per-ticket fallback."
+    prompt: |
+      A long-horizon worker can run implementers but cannot create isolated worktrees or branches.
+      Output ONLY:
+      1. DECISION
+      2. RECORD
+    expectations:
+      - "DECISION does not run parallel implementers in one shared worktree."
+      - "DECISION chooses serial work or the per-ticket Orca fallback."
+      - "RECORD captures the degradation in the ledger and report."
+
+  - name: additive_api_two_way
+    description: "A purely additive API addition is a two-way door, not a breaking API change."
+    prompt: |
+      The integration PR adds one new exported function to an existing library. It changes no
+      existing signature, stored format, deployment or external side effect.
+      Output ONLY:
+      1. DOOR
+      2. MERGE
+      3. WHY
+    expectations:
+      - "DOOR is two-way because the addition is purely additive and backward-compatible."
+      - "MERGE is automatic only after G-merge is green."
+      - "WHY does not treat every public API addition as a one-way door."
+
+

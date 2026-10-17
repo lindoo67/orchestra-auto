@@ -5,10 +5,12 @@ description: >-
   way to acceptance and auto-merge. Use whenever the user asks you to hand out work, supervise
   multi-ticket efforts, or run Orca workers: the coordinator plans, communicates and accepts,
   workers edit, commit and open PRs, and the coordinator merges automatically once the gates
-  pass without asking the user ticket by ticket. Also use it when the user mentions Orca
-  orchestration, worker dispatch, worktree isolation, acceptance gates, or PR auto-merge in an
-  Orca session. Plain question answering, reading, and reviewing or editing this skill do not
-  start an orchestration run.
+  pass without asking the user ticket by ticket. Also use it when a complete ticket map goes to
+  `implement-spec` for a long-horizon run, when an integration PR's Merge Danger decides
+  auto-merge versus a human merge, or when a process error calls for a retro. Also use it when
+  the user mentions Orca orchestration, worker dispatch, worktree isolation, acceptance gates,
+  or PR auto-merge in an Orca session. Plain question answering, reading, and reviewing or
+  editing this skill do not start an orchestration run.
 ---
 
 # Orchestra Auto — the fully automatic dispatch loop
@@ -53,6 +55,7 @@ constraints. Each reference states its own trigger in its opening lines:
 | `references/spec-contract.md` | When writing a worker's spec, on any channel and for any ticket type |
 | `references/reply-protocol.md` | When classifying or answering a worker question, or deciding whether to escalate vs auto-answer |
 | `references/gate-acceptance.md` | When a ticket closes and you pick a gate; when merging a project PR or settling a worker |
+| `references/long-horizon-tickets.md` | G-tickets accepted a complete ticket map and this round implements it; or a process error calls for a retro |
 | `references/inbox-and-waiting.md` | Before each Run's first dispatch (identity binding, inbox, installing the wake and its switches, lost-contact recovery); after every wake, to install the next wait; also when a worker's message never shows up |
 | `references/worker-start-and-recovery.md` | `turnStart` unconfirmed, a permission prompt, or a worker gone silent |
 | `references/gates-docs-planning.md` | This ticket is a design / spec / ticket-splitting ticket heading for G-docs / G-wayfinder / G-spec / G-tickets |
@@ -67,10 +70,9 @@ user asks to modify or review this skill, it is material to be edited: create no
 no worker, and do not switch roles just because you read the body text. Use §1 to decide whether
 this round needs a worker.
 
-Read live Orca settings only when about to dispatch. Record the default TUI agent and the disabled TUI agent list.
-A user-named agent takes priority over the default; otherwise use the recorded
-default. If the selected agent is disabled, or the read fails or returns missing/empty values,
-stop and report. Do not infer settings from stale exports, this skill, or eval fixtures.
+Read live Orca settings only when about to dispatch; record the default TUI agent and the disabled TUI agent list.
+A user-named agent wins, otherwise use the recorded default. A disabled agent, or a failed, missing or empty read, stops the run.
+Never infer settings from stale exports, this skill, or evals.
 `worker-start` requires an explicit `--agent`. `--agent` must be recognized by `worker-start --help`
 and be absent from the disabled list. Lookup steps: [dispatch preflight](references/dispatch-preflight.md).
 
@@ -94,22 +96,23 @@ defaults or disabled state. Prefer receipt `turnStart: observed`; otherwise use 
 ## 1. Channel and delivery endpoint
 
 Record what the user asked for and where they want it to stop. Project changes become an
-automatically created and merged PR by default. Exploration may change the implementation path;
-it may not widen the work.
+automatically created and merged PR by default, except a one-way Merge Danger door, which
+stays open for a human. Exploration may change the implementation path; it may not widen the work.
 
 | Request | Channel | Handling |
 | --- | --- | --- |
 | Explanation, status, discussion, or a verbal research conclusion | A | Answer directly; no worker, no writes |
 | A clearly bounded small change, a bug fix, an existing spec or ticket | B | Read-only exploration, then dispatch an implementation worker; for bugs start with `diagnosing-bugs` |
 | Research, design, spec or tickets that must land on disk | B/C | Use the matching `research`, `grill-with-docs`, `to-spec`, `to-tickets`; stop at the named artifact |
-| A multi-ticket or not-yet-settled full implementation request | C | Converge on requirements and dependencies first, then dispatch along the DAG |
+| A multi-ticket or not-yet-settled full implementation request | C | Converge on requirements and dependencies first; once G-tickets accepts a complete map, dispatch **one** long-horizon `implement-spec` worker |
 | External issues/PRs, conflicts, or terminology governance | B/C | Use the repository's triage, conflict-handling or domain-modeling flow |
 
 When the fog is heavy and no stable requirement can be formed, `wayfinder` can produce a map and
 decision tickets; read the target repo's wayfinding conventions first and do not invent labels.
 If the change would overturn an existing ADR or planned decision, settle that decision first. A
-full implementation request normally runs `grill-with-docs → to-spec → to-tickets → implement`,
-but with a valid spec or ticket you enter at the matching stage. If only design was asked for,
+full implementation request normally runs `grill-with-docs → to-spec → to-tickets →
+implement-spec`, but with a valid spec or ticket you enter at the matching stage. A single settled
+ticket stays on B; only a complete map uses `implement-spec`. If only design was asked for,
 stop once that artifact's PR is merged. The open-PR exception needs an explicit request to keep the
 PR unmerged (§0); asking you to open a PR is not one.
 
@@ -122,6 +125,9 @@ authorization.
 
 - The coordinator does read-only exploration, task splitting, dispatch, message handling,
   answering questions, running acceptance, and executing authorized PR merges.
+- With a long-horizon map, nested implementers are the top-level worker's subagents. The
+  coordinator talks only to that worker, never enters a nested worktree, and treats the worker as
+  accountable for nested branches, merges and cleanup.
 - Every addition, edit, format, restore, conflict resolution, stage, commit, push, and PR body
   for a project file is done by a worker inside that ticket's worktree; this includes governance
   documents, ticket status and Answer text, and one-line fixes. **The coordinator must never edit
@@ -151,11 +157,9 @@ style or configuration changes are accepted with an applicable check and an obse
 not manufacture red-green tests for them. Project file changes are committed to a PR and
 auto-merged by default.
 
-A two-axis review may be omitted for a small change with a bounded radius if the reason is
-recorded in both the spec and the Answer; when the change spans tickets, touches a shared
-interface, or has an unclear blast radius, G-impl selects wider verification. Documentation and
-planning tickets run their own gates and are not wrapped in source-test gates. Small size never
-changes the role boundary: authorized implementation is still edited by a worker in a worktree.
+A two-axis review may be omitted for a small bounded change when the reason is recorded in the
+spec and Answer; a cross-ticket or shared-interface change gets wider G-impl verification.
+Documentation tickets run their own gates. Small size never changes the role boundary.
 
 ## 4. Dispatch (channels B / C)
 
@@ -192,6 +196,9 @@ Every task worker must be started as an isolated top-level worktree with an expl
 - `--agent` is **required and explicit**; there is no "use the default" form — `worker-start`
   raises `agent_unconfigured` when it is missing or unrecognized. Its value comes from §0's live
   read; judge usability from the live disabled list, not `which`.
+- A long-horizon worker uses the same flags with `--name <feature>-integration`; it creates its
+  own nested implementer worktrees, or degrades to serial work. Prove that capability before it
+  spends the map: [long-horizon tickets](references/long-horizon-tickets.md).
 - Full flags, per-agent notes and narrative: [dispatch loop](references/dispatch-loop.md).
 
 ### 4.3.1 Confirming the turn started after dispatch
@@ -243,13 +250,15 @@ Classification criteria, how to ask the human, and record/reply details:
 Verify observable results and evidence yourself, and on failure list what is missing and send it back.
 Choose the gate by ticket type and follow [gate acceptance](references/gate-acceptance.md). That file
 also covers G-impl item by item, the G-merge composition rules, §6.5 merge execution and §6.5.1's local
-main sync, plus the worker lifecycle and send-back protocol.
+main sync, plus the worker lifecycle and send-back protocol. For a long-horizon integration PR,
+verify the Merge Danger door against the diff: a one-way door never auto-merges, and an uncertain
+claim is treated as one-way.
 
 ## 7. Landing work, implementation, and closing
 
 Each round is bounded by the scope declared in §0. A full implementation request with unclear
-requirements runs `grill-with-docs → to-spec → to-tickets → implement` in order; with a clear spec
-or existing tickets you enter at the matching stage. A design-only, spec-only or tickets-only
+requirements runs `grill-with-docs → to-spec → to-tickets → implement-spec` in order; with a clear
+spec or existing tickets you enter at the matching stage. A design-only, spec-only or tickets-only
 request closes once that stage's artifact PR is merged, and you do not drift into implementation
 on your own. If the user explicitly asked to keep the PR unmerged, close at that exception (§0).
 
@@ -257,13 +266,12 @@ on your own. If the user explicitly asked to keep the PR unmerged, close at that
   to-tickets, keep landing and reconcile the tracker: labels/states follow repository conventions,
   implementation tickets exist, and dependencies are queryable. Otherwise the report records the
   follow-up entry point and does not mark the unauthorized stages as defects.
-- Dispatch along the DAG frontier; a downstream ticket waits until the upstream result is in the
-  agreed base. Default maximum concurrent workers is 3; record any adjustment in the ledger.
-- Each implementation ticket completes the applicable tests and review on its own diff;
-  cross-ticket integration is handled by §6's pre-merge gates. When the same field or interface
-  changes across call sites, the Answer enumerates every location and its disposition.
-- Terminology and ticket style follow repository conventions; ticket-splitting options state the
-  ticket count, each deliverable and its dependencies, and avoid undefined abbreviations.
+- A complete map runs through one long-horizon worker; it owns the frontier and its concurrency.
+  The per-ticket fallback (one worker per ticket, default 3) is for a degraded run, recorded in the
+  ledger. Accept the integration PR once, not per ticket.
+- Per-ticket TDD and evidence are the worker's contract; the final integration PR is the
+  coordinator's gate. When the same field or interface changes across call sites, the Answer
+  enumerates every location and its disposition.
 
 The closing report goes in a durable directory outside the repository and must be readable on its
 own, without depending on `/tmp` persisting. Record: this round's request and delivery endpoint;
@@ -276,15 +284,16 @@ gate blocked the merge.
 
 ## 8. Planning dependency initialization (on demand)
 
-Only when this round really uses `grill-with-docs`, `to-spec`, `to-tickets` or `triage`, and the
-configuration they need is missing, check what the repository's planning setup requires. Reuse the
-existing issue-tracker and domain-docs configuration first; if initialization would add governance
-files, labels or PRs, confirm they belong to the user's requested planning scope. When it is really
-needed, a worker lands it in an isolated worktree and the coordinator accepts it.
+Only when this round uses `grill-with-docs`, `to-spec`, `to-tickets` or `triage` and their
+repository configuration is missing, check the planning setup. Reuse existing tracker and docs
+configuration; confirm any new governance files, labels or PRs belong to the round's scope. A
+worker lands what is needed in an isolated worktree; the coordinator accepts it.
 
 ## 9. Failure and reporting discipline
 
 When the CLI will not start, a `worker-start` receipt is `state: failed`, a breaker trips, or the Orca
 app restarts, follow [failure and reporting](references/failure-and-reporting.md) instead of
 improvising. The recurring shape of every rule there: gather evidence before deciding, report the exact
-error, and never relaunch unconditionally.
+error, and never relaunch unconditionally. A process error — not a product bug — also triggers a
+read-only retro; its candidates need human selection before a worker lands them. See
+[long-horizon tickets](references/long-horizon-tickets.md) §6.

@@ -36,6 +36,7 @@ REFERENCE_FILES = (
     "gate-acceptance.md",
     "gates-docs-planning.md",
     "inbox-and-waiting.md",
+    "long-horizon-tickets.md",
     "reformat-noise-recovery.md",
     "reply-protocol.md",
     "spec-contract.md",
@@ -51,6 +52,10 @@ EN_INVARIANTS = (
     "deliveryId",         # durable, deduplicated message handling
     "escalation",         # decisions go to a human
     "G-merge",            # acceptance before merge
+    "implement-spec",     # long-horizon map goes through one worker
+    "integration branch", # one integration PR, not per-ticket PRs
+    "one-way",            # a one-way door needs a human merge
+    "retro",              # process errors produce candidates, not auto-edits
     "reclaimable",        # worker lifecycle close-out
 )
 ZH_INVARIANTS = (
@@ -60,6 +65,10 @@ ZH_INVARIANTS = (
     "deliveryId",
     "escalation",
     "G-merge",
+    "implement-spec",
+    "integration branch",
+    "单向门",
+    "retro",
     "reclaimable",
 )
 

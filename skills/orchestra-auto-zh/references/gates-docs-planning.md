@@ -29,7 +29,7 @@
 
 ### 过了 G-docs 之后还没完
 
-完整实施请求通常经过 `grill-with-docs → to-spec → to-tickets → implement`。
+完整实施请求通常经过 `grill-with-docs → to-spec → to-tickets → implement-spec`。
 G-docs 只验收设计阶段；设计文件的 PR 通过 G-merge 并自动合并后，若本轮只要求设计，
 在报告里记录后续入口并停止；若本轮包含实施，继续 to-spec 与 to-tickets。见 SKILL.md §7。
 
@@ -79,13 +79,14 @@ G-docs 只验收设计阶段；设计文件的 PR 通过 G-merge 并自动合并
 
 - 每票是垂直 tracer bullet（穿全层、可独立验证、单 context 装得下），blocking edges 已声明；
   wide refactor 走 expand–contract 而不是硬切。
-- 票据先推远端，worktree 从仓库默认 base ref 切。
-- **有依赖的票：下游的 base 等 upstream 合并后再切**。下游票从默认 base ref 切会缺上游
-  改动（接口对不上，写出来就是红的）；从上游分支切又引入 stacked PR 的合并顺序约束。
-  默认在上游票合入 main 后从新的 base 切下游票；
-  用户明确要求保留开放 PR 时，按仓库的 stacked PR 或依赖分支策略处理，上游暂不合并——
-  frontier 语义天然支持这个排队。stacked PR 仅作显式例外（时间紧且依赖链短），采用时
-  必须在票据上写明栈序，§6.5 按栈序合并，任何一张 rebase 全栈跟着 rebase。
+- 票据先发布到配置的 tracker（远端 issue 或已提交的本地文件）。长程路径由 worker 从默认
+  base 切 integration branch，每个 implementer 从 integration branch 切自己的分支；下游票
+  只需等 blocker 合入 integration branch，不必等整张图合并。
+- **长程入口检查**：存在 spec 指针；每票有标题、要构建什么、验收标准与状态；每个 blocker 指向
+  真实存在的票；图无环；frontier 至少有一张票；tracker 可达，本地票文件从 worktree 可见；
+  每票能装进一个新鲜 context。任一不满足就回 `to-tickets`，不派 `implement-spec`。
+- 逐票回退时，下游等 upstream PR 合并后再切 base；stacked PR 仍是显式例外（时间紧且依赖链短），
+  采用时在票据上写栈序，§6.5 按栈序合并，任何一张 rebase 全栈跟着 rebase。
 
 **拆分粒度属 §5.1 判据 3（scope 边界）**，同样要问人。写拆票选项时用 to-tickets 的原语言
 描述**票数与每票交付什么**，不要自造口语（SKILL.md §7 有禁令与替换表）。

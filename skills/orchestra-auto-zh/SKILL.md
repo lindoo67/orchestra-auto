@@ -4,6 +4,8 @@ description: >-
   用 Orca 协调 supervised workers，将已授权的开发或规划工作推进到验收与自动合并。
   适用于用户要求派活、监督多任务或使用 Orca worker；协调者负责规划、通信和验收，
   worker 负责编辑、提交并创建 PR，门禁通过后协调者自动合并，无需逐张请用户确认。
+  也适用于把完整票图交给 `implement-spec` 做长程实施、用集成 PR 的 Merge Danger 决定
+  自动合并还是人类合并，或流程错误后需要 retro 的场景。
   也适用于用户提到 Orca 编排、worker 派活、worktree 隔离、门禁验收或 PR 自动合并的场景。
   纯问答及阅读、审查或修改本 skill 不启动编排。
 ---
@@ -41,6 +43,7 @@ description: >-
 | `references/spec-contract.md` | 给 worker 写 spec 时，任何通道、任何票型 |
 | `references/reply-protocol.md` | 对 worker 提问分类或应答，或判断升级问人还是代答时 |
 | `references/gate-acceptance.md` | 票据收尾、要选门禁时；合并项目 PR 或结算 worker 时 |
+| `references/long-horizon-tickets.md` | G-tickets 已验收完整票图且本轮要实施；或流程错误后需要 retro 时 |
 | `references/inbox-and-waiting.md` | 每个 Run 首次派活前（身份绑定、收件器、唤醒如何安装与开关、失联恢复）；每次唤醒后装回下一次等待；worker 的消息收不到时 |
 | `references/worker-start-and-recovery.md` | `turnStart` 未确认、权限提示或 worker 失联 |
 | `references/gates-docs-planning.md` | 手上是设计票 / 规格票 / 拆分票，准备过 G-docs / G-wayfinder / G-spec / G-tickets |
@@ -70,21 +73,22 @@ description: >-
 
 ## 1. 通道与交付终点
 
-记录用户要什么、停在哪里。项目改动默认自动创建并合并 PR。探索可改实现路径，不可擅自扩大工作范围。
+记录用户要什么、停在哪里。项目改动默认自动创建并合并 PR；单向 Merge Danger 门例外，
+保留开放 PR 给人类手动合并。探索可改实现路径，不可擅自扩大工作范围。
 
 | 请求 | 通道 | 处理 |
 | --- | --- | --- |
 | 解释、状态、讨论或口头研究结论 | A | 直接答复；不派 worker，不写仓库 |
 | 边界清楚的小改动、修 bug、已有 spec 或票 | B | 只读探索后派实施 worker；修 bug 先用 `diagnosing-bugs` |
 | 必须落盘的研究、设计、规格或拆票 | B/C | 用对应的 `research` / `grill-with-docs` / `to-spec` / `to-tickets`；停在约定产物 |
-| 多票或尚未收敛的完整实施请求 | C | 先收敛需求与依赖，再沿 DAG 派活 |
+| 多票或尚未收敛的完整实施请求 | C | 先收敛需求与依赖；G-tickets 验收完整票图后，只派 **一个** 长程 `implement-spec` worker |
 | 外部 issue/PR、冲突或术语治理 | B/C | 走仓库的 triage、冲突处理或领域建模流程 |
 
 雾重到形不成稳定需求时，可用 `wayfinder` 产出地图与决策票；先读目标仓库的寻路约定，不要发明标签。
 若改动会推翻已有 ADR 或计划决策，先定夺该决策。完整实施请求通常走
-`grill-with-docs → to-spec → to-tickets → implement`；已有有效 spec 或票时从对应阶段进入。
-只要设计就在设计产物 PR 合并后收口；开放 PR 例外只认「明确要求不合并」（判据见 §0），
-要求开 PR 不等于该例外。
+`grill-with-docs → to-spec → to-tickets → implement-spec`；已有有效 spec 或票时从对应阶段进入。
+已定案的单票仍走 B 通道；只有完整票图才用 `implement-spec`。只要设计就在设计产物 PR 合并后收口；
+开放 PR 例外只认「明确要求不合并」（判据见 §0），要求开 PR 不等于该例外。
 
 若 §4.1 只读探索发现多票、方案分叉或跨模块 seam，重新判定通道并重申模式声明。
 范围本身不清时按 §5 请人定夺；绝不把讨论请求转成实施授权。
@@ -92,6 +96,8 @@ description: >-
 ## 2. 角色边界：coordinator 规划与验收，worker 编辑与提交
 
 - coordinator 做只读探索、拆任务、派活、消息处理、应答、验收，以及执行已授权的 PR 合并。
+- 长程票图下，嵌套 implementer 是顶层 worker 的子代理。coordinator 只与顶层 worker 通信，
+  不进入任何嵌套 worktree，并视顶层 worker 对嵌套分支、合并与清理负责。
 - 项目文件的增删改、格式化、恢复、冲突解决、stage、commit、push、PR 正文一律由 worker 在该票 worktree 内完成（含治理文档、票状态与 Answer、一行修复）。
   **coordinator 不得在 worker 的 worktree 内编辑或提交，也不得用脚本或其他 agent 绕过。**
 - coordinator 可在仓库外写任务 spec、通信台账、证据与报告；`/tmp` 放过程产物，用户主目录下持久审计目录放长期审计。项目内落盘是 worker 的活。
@@ -135,6 +141,9 @@ Orca 默认把 worker 放进当前（= main）工作区；**orchestra-auto 覆�
 
 - 只用 `--worktree new-top-level`。**不许 `current`（= main），不许 `new-child`**（可能落在 main 子目录）。会话 cwd 不是目标 repo 时加 `--repo <selector>`。
 - `--agent` **必须显式**；没有「用默认」写法——缺失或不被识别时抛 `agent_unconfigured`。值来自 §0 的实时读取；能否用看禁用列表，不看 `which`。
+- 长程 worker 用同样的参数，`--name <feature>-integration`；它自己建嵌套 implementer
+  worktree，无法隔离时降级为串行。花掉整张票图前先证明该能力：
+  [长程票图](references/long-horizon-tickets.md)。
 - 完整参数与叙述见 [派活闭环](references/dispatch-loop.md)。
 
 ### 4.3.1 派活后确认 turn 开始
@@ -166,19 +175,22 @@ worker（grill / wayfinder / prototype 等）的每个提问，先分类再决�
 
 coordinator 自行核验可观察结果与证据，失败就列明缺项打回。按票型选门禁，具体见
 [门禁验收](references/gate-acceptance.md)。该文件同时覆盖 G-impl 逐条判据、G-merge 的组合规则、
-§6.5 合并执行与 §6.5.1 本地主分支同步，以及 worker 生命周期与打回协议。
+§6.5 合并执行与 §6.5.1 本地主分支同步，以及 worker 生命周期与打回协议。长程集成 PR 还要
+用真实 diff 核对 Merge Danger 的门：单向门绝不自动合并，拿不准就按单向门处理。
 
 ## 7. 落盘、实施与收口
 
 每轮以 §0 声明的工作范围为准。完整实施请求在需求尚不明确时依次走
-`grill-with-docs → to-spec → to-tickets → implement`；已有清楚 spec 或已开票时从对应阶段进入。
+`grill-with-docs → to-spec → to-tickets → implement-spec`；已有清楚 spec 或已开票时从对应阶段进入。
 只要设计、规格或票据的请求就在该阶段产物的 PR 合并后收口，不擅自进入实施。
 用户明确要求保留开放 PR、不要合并时按该例外收口（判据见 §0）。
 
 - 设计票按 G-docs 或 G-wayfinder 验收。若本轮包含 to-spec / to-tickets，继续落盘并核对 tracker；否则报告记录后续入口，不把未授权阶段标成缺陷。
-- 多票按 DAG frontier 派活；下游等上游结果进入约定 base 后再启动。同时在途 worker 默认最多 3 个；调整理由记入台账。
-- 每张实施票在自己的 diff 上完成适用测试和 review；跨票集成按 §6 合并前门禁处理。
-- 术语和票据写法优先遵循仓库现有约定；拆票选项说清票数、交付物与依赖。
+- 完整票图只派一个长程 worker；它拥有 frontier 与并发。逐票回退（一票一个 worker，默认 3 个）
+  只用于降级运行，并记入台账。集成 PR 验收一次，不逐票验收。
+- 逐票 TDD 与证据是 worker 的契约；最终集成 PR 是 coordinator 的门禁。同一字段或接口跨调用点
+  改动时，Answer 枚举每个位置及处置。
+- 术语和票据写法优先遵循仓库现有约定。
 
 收口报告写在 repo 外持久目录，应可独立理解。记录：本轮请求与交付终点、实际产物及其 commit/PR/合并状态、关键验收结果与证据位置、人定和代答的决策、未完成项、worker 生命周期清点。
 项目改动列逐 PR 合并 SHA、本地同步结果及最终主分支 HEAD；未能合并时写明原因。
@@ -194,4 +206,6 @@ coordinator 自行核验可观察结果与证据，失败就列明缺项打回�
 
 CLI 起不来、`worker-start` 回执 `state: failed`、熔断触发、或 Orca app 重启时，按
 [失败与上报](references/failure-and-reporting.md) 处置，不要临时发挥。那里每一条的共同形状是：
-先取证再决定、报告精确错误、绝不无条件 relaunch。
+先取证再决定、报告精确错误、绝不无条件 relaunch。流程错误（不是产品 bug）还要触发只读 retro；
+候选单经人类选定后才由 worker 落地，见
+[长程票图](references/long-horizon-tickets.md) §6。

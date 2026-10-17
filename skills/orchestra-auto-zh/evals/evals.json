@@ -1,41 +1,41 @@
 {
   "skill_name": "orchestra-auto-zh",
-  "_note": "场景评估用于检验通道判定、自动合并授权与门禁选择。它们只是提示词层面的检查：看读过本 skill 的 agent 是否按 skill 的意图推理，不是端到端证明编排可用。脚本行为由仓库的 fake-CLI 集成测试单独覆盖。每个场景都与具体机器无关：不包含主目录绝对路径、私有仓库或票据名、本机 agent 偏好，也不假设任何主机的设置快照。",
+  "_note": "场景评估用于检验通道判定、自动合并授权、门路由、长程票图与门禁选择。它们只是提示词层面的检查：看读过本 skill 的 agent 是否按 skill 的意图推理，不是端到端证明编排可用。脚本行为由仓库的 fake-CLI 集成测试单独覆盖。每个场景都与具体机器无关：不包含主目录绝对路径、私有仓库或票据名、本机 agent 偏好，也不假设任何主机的设置快照。",
   "evals": [
     {
       "id": 0,
       "name": "multiticket-review",
-      "prompt": "你正在跑 orchestra-auto。需求已经过 grill 与 to-spec，现在你手上是 5 张已经开好的实施票（都在同一个 GitHub issue tracker 上，blocking edges 已声明，其中 3 张无依赖可并行）。改动横跨一个后端文件、两个前端组件文件与测试。\n\n请只输出你的执行计划，不要真的派 worker、不要跑任何命令。用这个结构：\n\n1. REVIEW_HANDLING: 双轴 code-review 你打算怎么安排（在哪一步、做几次、谁做）\n2. SPEC_ACCEPTANCE: 你写每张票的 spec 时，Observable acceptance 一节会包含哪些条目（逐条列）\n3. DISPATCH_ORDER: 派活顺序\n4. WHY: 用 3-5 句说明你为何这样安排 review\n\n请严格按这 4 个标签输出，每条都要有具体内容。",
-      "expected_output": "在每张票的 G-impl 门禁里各自过双轴 review（5 次，随票走），而不是攒到合流后做一次；spec 的 Observable acceptance 里逐条写明包含双轴 code-review 小节；解释原因是小 diff 里票内不一致更容易看出，且返工成本低。",
+      "prompt": "你正在跑 orchestra-auto。需求已经过 grill 与 to-spec，现在你手上是 5 张已经开好的实施票（都在同一个 GitHub issue tracker 上，blocking edges 已声明，其中 3 张无依赖可并行）。改动横跨一个后端文件、两个前端组件文件与测试。\n\n请只输出你的执行计划，不要真的派 worker、不要跑任何命令。用这个结构：\n\n1. ENTRY: 整张票图用哪个 skill 或交接方式\n2. TOPOLOGY: 谁派 implementer、各自在哪工作、分支怎么合\n3. REVIEW: 唯一一次双轴 code-review 在哪做，逐票证据用什么替代\n4. PR_AND_DOOR: PR 粒度，以及 two-way 与 one-way 的合并路由\n5. WHY: 用 3-5 句说明为什么这个拓扑正确\n\n请严格按这 5 个标签输出，每条都要有具体内容。",
+      "expected_output": "一个长程 worker 对整张票图跑 `implement-spec`：每个 implementer 拿一张 frontier 票，在自己的 worktree 与从 integration branch 切出的分支上工作，走 TDD，报告前把 integration tip 合入；merger 步骤按 DAG 顺序合入。整张图产出唯一一个集成 PR，不是 5 个 PR。唯一一次双轴 code-review 在所有票完成后跑在 integration branch 上；逐票 TDD 加协调者抽查取代逐票 review。PR 正文用 `pr` skill；two-way 门在 G-merge 通过后才自动合并，one-way 门留给人类。WHY 论证单一集成 PR 与基于 frontier 的并发。",
       "files": [],
       "assertions": [
         {
-          "text": "REVIEW_HANDLING 为 5 张票各安排一次双轴 review（随票走），而不是合流后做一次池化的 review",
-          "name": "review_per_ticket"
+          "text": "ENTRY 派一个长程 worker 对整张图使用 implement-spec，而不是 5 个逐票 worker",
+          "name": "long_horizon_worker"
         },
         {
-          "text": "REVIEW_HANDLING 没有把 review 推到「所有票都合并之后」（不把 after all / 最后统一做一次 当成主计划）",
-          "name": "review_not_deferred"
+          "text": "TOPOLOGY 让每个 implementer 有自己的 worktree，分支从 integration branch 切出",
+          "name": "per_ticket_worktrees"
         },
         {
-          "text": "review 位置在每张票的 G-impl 门禁内（或该票的 Answer 里），不是只出现在最终收口报告里",
-          "name": "review_in_gate"
+          "text": "TOPOLOGY 按 DAG 顺序把 implementer 分支合入 integration branch（merger 步骤或 worker）",
+          "name": "dag_merge"
         },
         {
-          "text": "SPEC_ACCEPTANCE 明确列出双轴 code-review 小节（Standards + Spec）作为验收条目",
-          "name": "acceptance_has_review"
+          "text": "PR_AND_DOOR 为整张图产出唯一一个集成 PR，不是每票一个 PR",
+          "name": "one_integration_pr"
         },
         {
-          "text": "SPEC_ACCEPTANCE 列出红→绿 TDD 证据",
-          "name": "acceptance_has_redgreen"
+          "text": "REVIEW 在所有票完成后于 integration branch 跑一次双轴 code-review，不是逐票 review",
+          "name": "integration_review_once"
         },
         {
-          "text": "SPEC_ACCEPTANCE 提到 typecheck/lint 零新增（或仓库的格式门禁）",
-          "name": "acceptance_has_format"
+          "text": "REVIEW 或验收保留逐票 TDD 证据与协调者抽查，而不是逐票双轴 review",
+          "name": "tdd_and_spotcheck"
         },
         {
-          "text": "WHY 用小 diff / 返工成本低来论证随票 review，而不是只写「这是要求」",
-          "name": "why_cites_small_diff"
+          "text": "PR_AND_DOOR 的 two-way 门只在 G-merge 通过后自动合并，one-way 门留给人类",
+          "name": "door_routing"
         }
       ]
     },
@@ -472,21 +472,25 @@
     {
       "id": 15,
       "name": "integration_before_merge",
-      "prompt": "三张并行实施票各有 OPEN PR，用户已明确授权合并。单票测试已过，跨票全量测试很慢。说明测试、合并顺序及失败处置。",
-      "expected_output": "在隔离集成 worktree 按拟合并方式与 DAG 顺序组合最终 heads，记录 SHA 并在合并前跑全量；组合失败则修 PR，不把第一次全量放在合并后。",
+      "prompt": "一份 spec 已拆成三张带 blocking edges 的票。一个长程 worker 正在用 implement-spec，最终只开一个集成 PR。两张票现在就绪，第三张被其中一张阻塞。全量测试很慢。说明合并顺序、最终验证与失败处置。不执行。",
+      "expected_output": "从 integration branch 并行启动两张就绪票；按 DAG 顺序在完成时合入；第三张等其 blocker 合入 integration branch 后再启动。把 integration branch rebase 到当前 base，在最终 head 上跑适用的全量测试，只开一个集成 PR。合并或测试失败会阻塞 PR 并打回 worker；不要把第一次全量拖到合并后。",
       "files": [],
       "assertions": [
         {
-          "name": "premerge_full",
-          "text": "合并前运行适用的全量集成验证"
+          "name": "frontier_parallel",
+          "text": "从 frontier 并行启动两张就绪票"
         },
         {
-          "name": "records_heads",
-          "text": "记录最终 head 与 base 身份"
+          "name": "blocker_gates_third",
+          "text": "第三张票等其 blocker 合入 integration branch 后再启动"
         },
         {
-          "name": "failure_blocks_merge",
-          "text": "集成门禁失败会阻塞合并，而不是合并后才发现"
+          "name": "premerge_full_on_integration",
+          "text": "合并前在最终 integration head 上跑适用的全量验证"
+        },
+        {
+          "name": "one_integration_pr",
+          "text": "三张票只产出一个集成 PR，不是三个 PR"
         }
       ]
     },
@@ -514,21 +518,25 @@
     {
       "id": 17,
       "name": "standing_auto_merge",
-      "prompt": "用户说：“修好这个导出按钮并给我 PR。”本会话用户已明确表示以后希望自动提交并合并 PR，不要每次请他确认。请列出从 worker 完工到收口的动作和停止条件，不执行。",
-      "expected_output": "worker 提交推送并创建 PR；coordinator 独立验收、过 G-merge，在门禁绿且仓库允许时自动合并、同步主分支、清理 worker 并报告。合并不再单独请用户确认；门禁失败或仓库限制时保留现场并报告。",
+      "prompt": "用户说：“修好这个导出按钮并给我 PR。”本会话用户已明确表示以后希望自动提交并合并 PR，不要每次请他确认。diff 是可回滚的纯 UI 改动。请列出从 worker 完工到收口的动作和停止条件，不执行。",
+      "expected_output": "worker 用 pr skill 提交推送并创建 PR，正文写明 Door: two-way 与证据。coordinator 独立验收，用 diff 核对门声明，过 G-merge，在门禁绿且仓库允许时自动合并、同步主分支、清理 worker 并报告。合并不再单独请用户确认；门禁失败、门是单向门或拿不准、或仓库限制时保留现场并报告。",
       "files": [],
       "assertions": [
         {
           "name": "merge_without_reconfirmation",
-          "text": "对已验收 PR 直接合并，不再请一次批准"
+          "text": "对已验收的双向门 PR 直接合并，不再请一次批准"
         },
         {
           "name": "gate_before_merge",
           "text": "合并前运行验收与合并门禁"
         },
         {
+          "name": "door_verified",
+          "text": "用 diff 核对 Door 声明，而不是相信 worker 的标签"
+        },
+        {
           "name": "blocked_state_report",
-          "text": "门禁或仓库规则阻止合并时不声称已完成"
+          "text": "门禁、单向门或仓库规则阻止合并不声称已完成"
         }
       ]
     },
@@ -567,6 +575,182 @@
         {
           "name": "already_saved_head_stays_quiet",
           "text": "不把已经落盘的批次当成新的唤醒"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "ticket_map_ready_uses_implement_spec",
+      "prompt": "你正在跑 orchestra-auto。一个 spec 与五张实施票都在 GitHub tracker 上；每张票有验收标准，每个 blocker 指向真实存在的票，图无环，且两张票已就绪。用户要求实施整张票图。只输出：\n1. ENTRY\n2. DISPATCH\n3. ACCEPTANCE\n4. WHY\n不执行。",
+      "expected_output": "用 implement-spec 为整张图派一个长程 worker；worker 为两张就绪票启动 implementer，并沿 frontier 推进。不要派五个逐票 Orca worker。预期只有一个集成 PR，在最终 head 通过全量门禁后验收一次，逐票 TDD 加最终集成 code-review。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_implement_spec",
+          "text": "ENTRY 对完整票图使用 implement-spec"
+        },
+        {
+          "name": "one_worker_for_map",
+          "text": "DISPATCH 只派一个长程 worker，不是逐票一个"
+        },
+        {
+          "name": "frontier_start",
+          "text": "启动两张就绪票并沿 frontier 推进"
+        },
+        {
+          "name": "one_integration_pr",
+          "text": "ACCEPTANCE 预期一个集成 PR，不是逐票 PR"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "incomplete_ticket_map_blocks_implement_spec",
+      "prompt": "你正在跑 orchestra-auto。票图里 03 与 04 之间有环，且 05 没有验收标准。用户要求现在开始实施。只输出：\n1. ENTRY\n2. ACTION\n3. WHY\n不执行。",
+      "expected_output": "不要派 implement-spec。把票图打回 to-tickets / G-tickets，指出环与缺失的验收标准，等票图完整后再开始。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "blocks_dispatch",
+          "text": "不为不完整票图派 implement-spec"
+        },
+        {
+          "name": "returns_to_to_tickets",
+          "text": "把票图打回 to-tickets 或 G-tickets"
+        },
+        {
+          "name": "names_specific_defects",
+          "text": "指出 03-04 的环与 05 缺失验收标准"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "one_way_door_requires_human_merge",
+      "prompt": "你正在跑 orchestra-auto。集成 PR 加了数据库迁移，删除一列并重写行；PR 正文写 Door: two-way。用户此前已授权自动合并。只输出：\n1. DOOR\n2. MERGE\n3. WHY\n不执行。",
+      "expected_output": "因破坏性迁移把 PR 判为单向门，推翻正文的 two-way 标签。不要自动合并；保留 PR，报告门的证据与人类手动合并的确切动作。此前的一般自动合并授权不覆盖单向门。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "classifies_one_way",
+          "text": "把迁移 PR 判为单向门"
+        },
+        {
+          "name": "overrides_two_way_claim",
+          "text": "因 diff 有单向门触发项而拒绝正文的 two-way 标签"
+        },
+        {
+          "name": "no_auto_merge",
+          "text": "即使此前有一般授权也不自动合并"
+        },
+        {
+          "name": "human_merge_action",
+          "text": "保留 PR 并报告人类手动合并动作"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "door_claim_conflict_conservative",
+      "prompt": "你正在跑 orchestra-auto。worker 的 PR 正文写 Door: two-way，但 diff 新增公共 CLI flag 并改了持久化 JSON schema。只输出：\n1. DOOR\n2. ACTION\n3. WHY\n不执行。",
+      "expected_output": "把 PR 判为单向门，打回 worker 修正正文，然后保留给人类合并。声明与 diff 冲突时按保守方式判为单向门。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "one_way",
+          "text": "把 PR 判为单向门"
+        },
+        {
+          "name": "send_back_body",
+          "text": "打回修正 Merge Danger 正文"
+        },
+        {
+          "name": "no_auto_merge",
+          "text": "不自动合并有冲突声明的 PR"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "retro_candidates_need_human_selection",
+      "prompt": "你正在跑 orchestra-auto。一个 worker 绕过角色边界直接改了 main；本轮已停止。你有会话与 worker transcript。只输出：\n1. NEXT\n2. CANDIDATES\n3. LANDING\n不执行。",
+      "expected_output": "对流程错误只读地跑 retro，把按严重度排序的候选单存在目标仓库之外，交给人类。不要自动改 skill。人类选定候选后，派 worker 按正常门禁落地，并为每个被接受的候选加一个 eval。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "runs_retro",
+          "text": "把它当流程错误跑 retro，而不是产品 bug"
+        },
+        {
+          "name": "candidates_outside_repo",
+          "text": "候选单存在目标仓库之外"
+        },
+        {
+          "name": "human_selects",
+          "text": "把候选单交给人类并等待选择"
+        },
+        {
+          "name": "no_auto_landing",
+          "text": "不自动编辑或自动落地改进"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "nested_worktree_fallback",
+      "prompt": "你正在跑 orchestra-auto。一个长程 worker 报告它能跑 implementer，但无法创建隔离 worktree 或分支。只输出：\n1. DECISION\n2. WHY\n3. RECORD\n不执行。",
+      "expected_output": "不要让多个 implementer 共用一个 worktree 并行。改为在 worker 自己的工作区串行，或回退到逐票 Orca worker；把降级记入台账并报告。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_shared_worktree",
+          "text": "不让并行 implementer 共用 worktree"
+        },
+        {
+          "name": "serial_or_fallback",
+          "text": "选择串行或逐票回退"
+        },
+        {
+          "name": "records_degradation",
+          "text": "把降级记入台账与报告"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "single_ticket_stays_channel_b",
+      "prompt": "你正在跑 orchestra-auto。用户要求修一个边界清楚的 bug，已有票；没有票图。只输出：\n1. CHANNEL\n2. PATH\n3. WHY\n不执行。",
+      "expected_output": "走 B 通道：一个实施 worker、一个 worktree、短 spec。不要给单票套 implement-spec；那条路径只给完整票图。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "channel_b",
+          "text": "单票走 B 通道"
+        },
+        {
+          "name": "no_implement_spec",
+          "text": "单票不使用 implement-spec"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "additive_api_is_two_way",
+      "prompt": "你正在跑 orchestra-auto。集成 PR 给现有库新增一个导出函数 `formatDate`。没有改既有签名、存储格式、部署或外部副作用。PR 正文写 Door: two-way。只输出：\n1. DOOR\n2. MERGE\n3. WHY\n不执行。",
+      "expected_output": "把 PR 判为双向门：纯增量、向后兼容的 API 新增可低成本回滚，不构成单向门触发项。G-merge 全绿且仓库允许时自动合并；单向门仍要停下来交给人类。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "additive_api_two_way",
+          "text": "把纯增量 API 新增判为双向门"
+        },
+        {
+          "name": "no_breaking_change",
+          "text": "不把纯新增函数当成破坏性公共 API 变更"
+        },
+        {
+          "name": "auto_merge_after_gate",
+          "text": "只在 G-merge 全绿后自动合并，而不是仅凭正文写 two-way"
         }
       ]
     }

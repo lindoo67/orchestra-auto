@@ -57,13 +57,25 @@ question per §5.
    message is lost, reconcile the Dispatch with the real artifacts rather than dispatching a
    second editor.
 5. **Deliverables**: when project files changed, verify the worktree is clean, the commit exists
-   and the branch is pushed; verify the OPEN PR's head matches this ticket's final commit and
-   that its body states Summary, Evidence and Merge Danger accurately; the worker uses the
-   locally available pr skill or the repository template and creates or updates with
-   `--body-file`. If the PR is missing or the body lacks evidence, send it back to the worker to
-   complete; the coordinator does not write it.
+   and the branch is pushed; verify the OPEN PR's head matches the ticket's final commit and its
+   body states Summary, Evidence, Merge Danger and `Closes` accurately; the worker uses the `pr`
+   skill or the repository template with `--body-file`. For a long-horizon map, the deliverable is
+   one integration PR: verify every ticket branch is merged and spot-check at least two tickets'
+   evidence; per-ticket TDD plus the final integration `code-review` replaces per-ticket two-axis
+   reviews, and the report records that choice. If the PR is missing or the body lacks evidence,
+   send it back; the coordinator does not write it.
 
-### G-merge — automatic merge gate for project PRs
+### G-merge — door-aware merge gate for project PRs
+
+0. **Door check**: read the PR body's `Door` and `Blast Radius`, then verify the claim against the
+   diff yourself. One-way triggers: schema/data migration or deletion; breaking public
+   API/CLI/SDK change (removal, rename, or a changed signature/semantics/default) or a persisted
+   format change — a purely additive, backward-compatible addition is not itself one-way; auth/
+   permissions/secrets; billing/pricing; deploy/infra; irreversible external side effect; feature
+   removal; major dependency upgrade; a broad blast radius with no simple revert. Any one makes
+   the whole PR one-way; when unsure, treat it as one-way. A two-way claim contradicted by the diff
+   goes back to the worker to correct the body and is then treated as one-way. A one-way PR stops
+   here: leave it open and report the exact human merge action. Never auto-merge a one-way door.
 
 Check the repository's conventions for CI and merging first. Separate known baseline failures
 from real failures this ticket introduced; a locally equivalent gate must still pass. For several
@@ -72,9 +84,9 @@ and DAG order you intend to use, recording the base, each head SHA and every ste
 the coordinator checks the combined result and runs the applicable full gate or equivalent CI on
 the final tree. A single PR gets the same verification on its final head. Fix a PR first on a
 combined conflict or a real red; once any head or the target base changes, re-judge whether the
-earlier evidence still covers what you intend to merge. All gates green means §6.5's automatic
-merge, with no further user confirmation; when the user explicitly asked to keep an open PR, stop
-here.
+earlier evidence still covers what you intend to merge. For a two-way PR, all gates green means
+§6.5's automatic merge, with no further user confirmation; when the user explicitly asked to keep
+an open PR, stop here.
 
 ### §6.5 Merge execution and teardown
 
@@ -88,7 +100,8 @@ here.
    check and record the SHA. On an anomaly, preserve the scene and dispatch a fix ticket rather
    than writing a merged state as a passed acceptance.
 4. Close out at the stage matching this round's scope; merging a design PR does not by itself
-   authorize creating implementation tickets.
+   authorize creating implementation tickets. A one-way PR is not in this merge loop: the human
+   merges it manually, and a later turn records the merge SHA and syncs main.
 
 #### §6.5.1 Syncing local main after each PR merge
 

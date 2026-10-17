@@ -47,6 +47,13 @@ Observable acceptance：<适用的测试命令与可观察结果；修复类红�
 提问通道：orchestration ask（禁 AskUserQuestion）。
 ```
 
+长程票图下，`前置 skill` 是 `implement-spec` 的绝对路径。另加 `skill 解析：`（有 Skill tool 时
+用 `tdd` / `code-review`；没有就直接读它们的绝对路径）、`PR skill：`（`pr` 的绝对路径）、
+`Tracker：`、`Spec：`、`Tickets：` 与 `Integration branch：`。worker 必须回报图与 frontier、
+每票的 branch 与 commit、integration branch、唯一的集成 PR、`Closes` 链接，以及带证据的
+Door 声明。嵌套的决策类问题经顶层 worker 上抛；worker 不得替人类作答。逐票 TDD 加
+integration branch 上的一次 `code-review` 是本路径的 review 模型，不要再安排逐票双轴 review。
+
 **票型行：紧随前置 skill 写出票型与门禁**：
 
 ```text

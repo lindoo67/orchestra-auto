@@ -60,8 +60,11 @@ falls off. The parenthesised section is where it belongs.
       acceptance, with the BEHAVIOR RULE paragraph and the pre-skill's absolute path as the
       first two items (§4.4).
 - [ ] **The worktree parameters are right**: `--worktree new-top-level` + `--name <ticket slug>`
-      + `--agent <§0's worker>`; if the session cwd is not the target repo, `--repo <selector>`
-      was added (§4.3).
+      + `--agent <§0's worker>`; a long-horizon map uses `--name <feature>-integration` and one
+      worker. If the session cwd is not the target repo, add `--repo <selector>` (§4.3).
+- [ ] **A long-horizon map is really ready**: one integration PR, `implement-spec` as the
+      pre-skill, a complete ticket map and a reachable tracker; the worker's first report proves
+      nested worktree isolation or records the serial fallback (§ long-horizon reference).
 - [ ] **The main hard-rule self-check really ran** (§2): this round will not modify project files
       or create commits in the main working copy; only §6.5.1's fast-forward sync of already
       merged work may update the main branch.
@@ -76,8 +79,10 @@ falls off. The parenthesised section is where it belongs.
       and write the reason down.
       **The mechanical test**: an implementation ticket's `Observable acceptance` must contain
       the literal string `code-review` (together with a two-axis / Standards + Spec phrase)
-      unless §3 exempts it. Run `grep -c 'code-review' <spec>`; a zero means it is not written
-      down and you may not dispatch.
+      unless §3 exempts it. A long-horizon map writes "one two-axis code-review on the
+      integration branch" plus per-ticket TDD; it must not also require a per-ticket two-axis
+      review. Run `grep -c 'code-review' <spec>`; a zero means it is not written down and you
+      may not dispatch.
       A recurring failure: a round of implementation specs had `review-mentions=0` across the
       board, because their pre-skill pointed at `implement`, whose body says to use
       `/code-review` — and from that I assumed "the worker will do it itself". But a worker

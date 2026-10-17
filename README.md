@@ -21,12 +21,18 @@ Read [README.zh-CN.md](README.zh-CN.md) for the Chinese version of this document
 ## What it does
 
 The coordinator plans, communicates and accepts; workers edit, commit and open PRs. Once the gates
-pass, the coordinator merges — no per-ticket confirmation round trip.
+pass, the coordinator merges — no per-ticket confirmation round trip. A complete ticket map goes
+to one long-horizon `implement-spec` worker: it runs implementers in their own worktrees, merges
+them into an integration branch, and opens one integration PR. The PR's Merge Danger decides the
+last step: a two-way door auto-merges after G-merge, while a one-way door stays open for a human.
+A process error, not a product bug, produces a read-only retro candidate list; the human selects
+what a worker then lands.
 
 The safety invariants the skill will not trade away:
 
-- **Isolation**: every worker gets a fresh top-level worktree; the coordinator never edits or
-  commits in a worker's worktree, and never on the main working copy.
+- **Isolation**: every worker gets a fresh top-level worktree; a long-horizon worker's nested
+  implementers each get their own worktree and branch, and the coordinator never edits or
+  commits in a worker's worktree, never on the main working copy.
 - **Real start evidence**: a `state: ready` receipt is not proof a turn began; the skill requires
   per-agent evidence (or `turnStart: observed`).
 - **Live worker settings**: the worker harness comes from Orca's current settings, checked against
@@ -35,10 +41,14 @@ The safety invariants the skill will not trade away:
   acknowledged only after the whole batch is handled.
 - **Decisions go to a human**: scope, approach forks and the escalation five (credentials, third
   parties, payment, manual approval, irreversible live-data operations) are never self-answered.
+  A one-way Merge Danger door is also a human merge, not an automatic one.
 - **Gates by ticket type**: a design ticket does not run source tests; an implementation ticket does
   not skip its review.
 - **Acceptance before merge**: merges wait for the gate, and an unusual diff is preserved as
-  evidence before anything is reverted.
+  evidence before anything is reverted. The door is verified against the diff, not trusted from
+  the PR body.
+- **Process errors leave a trail**: retro candidates are written outside the target repository and
+  need human selection before a worker lands them.
 - **Failure has a stop threshold**: bounded retries, a per-ticket breaker and a run-level breaker.
 - **Lifecycle close-out**: settled workers are released, retained or handed a follow-up Task —
   nothing is silently abandoned.
@@ -63,7 +73,7 @@ flowchart TD
     CH -->|"A — explanation, status, discussion, verbal research"| ANS["Answer directly, no worker, no repository writes"]
     ANS --> DONE_A["Nothing to dispatch and nothing to merge"]
     CH -->|"B — bounded change, bug fix, existing spec or ticket"| SCOUT["§4.1 read-only exploration on main — the endpoint is the spec, not the edit"]
-    CH -->|"C — multi-ticket or not-yet-settled implementation"| CONV["§1 converge requirements and dependencies first: grill-with-docs, to-spec, to-tickets, then dispatch along the DAG"]
+    CH -->|"C — multi-ticket or not-yet-settled implementation"| CONV["§1 converge requirements and dependencies first: grill-with-docs, to-spec, to-tickets; once G-tickets accepts the map, one long-horizon implement-spec worker"]
     CONV --> PLAN8["§8 planning setup the round really needs is landed by a worker in an isolated worktree, then accepted"]
     PLAN8 --> HARD
     SCOUT --> HARD
@@ -159,10 +169,10 @@ flowchart TD
     SEND --> BREAK{"Same gate failed twice on one ticket, or five send-backs across the run?"}
     BREAK -->|"yes"| STOP9["§9 stop dispatching and bring the human the state and the evidence"]
     BREAK -->|"no"| RECYCLE["Follow-up Task, or the original worktree selector for a reused terminal, and the new turn re-runs §4.3.1 — back to the loop in panel 2"]
-    GREEN -->|"yes"| MERGE["§6.5 G-merge: for several PRs an integration worker composes the final heads in the intended merge order and the combined result is checked first"]
-    MERGE --> EXC{"Did the user explicitly ask to keep the PR unmerged — asking for a PR is not that — or did a rule or a gate block it?"}
-    EXC -->|"yes"| KEEP["Keep the PR, report the real state, and stop here"]
-    EXC -->|"no"| SYNC["Merge in DAG or stacked order, then §6.5.1 pull the merged main only on a clean working copy and verify with merge-base --is-ancestor"]
+    GREEN -->|"yes"| MERGE["§6 G-merge on the final integration head: verify the PR's Door claim against the diff; a two-way door still needs every gate green"]
+    MERGE --> EXC{"One-way or uncertain door, an explicit request to keep the PR unmerged, or a rule/gate block?"}
+    EXC -->|"yes"| KEEP["Leave the PR open; a human merges a one-way door; report the real state and the exact merge action"]
+    EXC -->|"no"| SYNC["Two-way: merge automatically, then §6.5.1 pull the merged main only on a clean working copy and verify with merge-base --is-ancestor"]
     KEEP --> REPORT
     SYNC --> LIFE["§6.5 worker lifecycle: follow-up, retain or release, then query reclaimable and settle every item"]
     LIFE --> REPORT["§7 closing report in a durable directory outside the repository: artifacts with merge SHAs, acceptance evidence, human decisions, leftovers, lifecycle count"]

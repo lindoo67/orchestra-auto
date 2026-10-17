@@ -18,21 +18,25 @@
 ## 它做什么
 
 coordinator 负责规划、通信与验收；worker 负责编辑、提交与创建 PR。门禁通过后由 coordinator
-合并——不再逐张票据请人确认。
+合并——不再逐张票据请人确认。完整票图交给一个长程 `implement-spec` worker：它让 implementer
+在各自 worktree 实施，合入 integration branch，只开一个集成 PR。PR 的 Merge Danger 决定最后
+一步：双向门在 G-merge 通过后自动合并，单向门保留给人类手动合并。流程错误（不是产品 bug）
+产出只读 retro 候选单，由人类选定后 worker 再落地。
 
 skill 不会拿来交换的安全不变量：
 
-- **隔离**：每个 worker 都有自己的顶层 worktree；coordinator 绝不在 worker 的 worktree 里编辑
-  或提交，也绝不在主工作副本上这么做。
+- **隔离**：每个 worker 都有自己的顶层 worktree；长程 worker 的嵌套 implementer 各有自己的
+  worktree 与分支；coordinator 绝不在 worker 的 worktree 里编辑或提交，也绝不在主工作副本上这么做。
 - **真实启动证据**：`state: ready` 不等于 turn 已开始；skill 要求按 agent 取得实际证据（或回执的
   `turnStart: observed`）。
 - **实时 worker 设置**：worker harness 来自 Orca 的当前设置，并与当前禁用列表比对——不凭习惯、
   不读过期快照。
 - **消息身份**：投递按 delivery ID 原子落盘、按 ID 去重，且只有在整批处理完之后才 ack。
 - **决策问人**：范围、方案分叉与 escalation 五类（凭证、第三方、付费、人工审批、不可逆
-  live 数据操作）绝不代答。
+  live 数据操作）绝不代答。单向 Merge Danger 门也必须由人类合并，不自动合并。
 - **门禁按票型**：设计票不跑源码测试；实施票不跳过自己的 review。
-- **先验收后合并**：合并等门禁；异常 diff 先留证，再谈处理。
+- **先验收后合并**：合并等门禁；异常 diff 先留证，再谈处理。门要用 diff 核对，不能只信 PR 正文。
+- **流程错误留痕**：retro 候选单存在目标仓库之外，经人类选定后才由 worker 落地。
 - **失败有停止阈值**：有界重试、单票熔断与 run 级熔断。
 - **生命周期收尾**：已结算 worker 被 release、retain 或派 follow-up Task——没有静默遗弃。
 
@@ -54,7 +58,7 @@ flowchart TD
     CH -->|"A——解释、状态、讨论、口头研究结论"| ANS["直接答复：不派 worker、不写仓库"]
     ANS --> DONE_A["没有要派的话，也没有要合并的东西"]
     CH -->|"B——边界清楚的小改动、修 bug、已有 spec 或票"| SCOUT["§4.1 在 main 上做只读探索——终点是 spec，不是动手"]
-    CH -->|"C——多票、或需求尚未收敛的完整实施"| CONV["§1 先收敛需求与依赖：grill-with-docs、to-spec、to-tickets，再沿 DAG 派活"]
+    CH -->|"C——多票、或需求尚未收敛的完整实施"| CONV["§1 先收敛需求与依赖：grill-with-docs、to-spec、to-tickets；G-tickets 验收票图后，一个长程 implement-spec worker"]
     CONV --> PLAN8["§8 本轮真正需要的规划配置，由 worker 在独立 worktree 落盘、coordinator 验收"]
     PLAN8 --> HARD
     SCOUT --> HARD
@@ -148,10 +152,10 @@ flowchart TD
     SEND --> BREAK{"同一票同门禁连续失败两次，或 run 级打回累计五次？"}
     BREAK -->|"是"| STOP9["§9 停止派活，把人要的状态与证据交给人"]
     BREAK -->|"否"| RECYCLE["派 follow-up Task，或对复用终端写明原 worktree selector；新 turn 重跑 §4.3.1——回到面板 2 的闭环"]
-    GREEN -->|"是"| MERGE["§6.5 G-merge：多 PR 时由集成 worker 按既定合并顺序组合最终 head，先验组合结果"]
-    MERGE --> EXC{"用户明确要求保留 PR 不合并——「要求开 PR」不算——或有规则、门禁挡住了合并？"}
-    EXC -->|"是"| KEEP["保留 PR、如实报告状态，本轮在此收口"]
-    EXC -->|"否"| SYNC["按 DAG 或 stack 顺序合并，再按 §6.5.1 只在干净副本上拉取已合并 main，并用 merge-base --is-ancestor 校验"]
+    GREEN -->|"是"| MERGE["§6 在最终集成 head 上跑 G-merge：用 diff 核对 PR 的 Door 声明；双向门也必须门禁全绿"]
+    MERGE --> EXC{"单向门或拿不准、用户明确要求保留 PR，或有规则/门禁挡住？"}
+    EXC -->|"是"| KEEP["保留 PR；单向门由人类手动合并；如实报告状态与确切合并动作"]
+    EXC -->|"否"| SYNC["双向门：自动合并，再按 §6.5.1 只在干净副本上拉取已合并 main，并用 merge-base --is-ancestor 校验"]
     KEEP --> REPORT
     SYNC --> LIFE["§6.5 worker 生命周期：follow-up、retain 或 release，然后查 reclaimable 并逐项结清"]
     LIFE --> REPORT["§7 收口报告写在 repo 外持久目录：产物与合并 SHA、验收证据、人定决策、未完成项、生命周期清点"]
