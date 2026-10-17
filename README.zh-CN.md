@@ -32,13 +32,18 @@ Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背�
 已有 spec 或已有票，就从对应的那一格进入。一张已经定案的票用 `implement`。整张票图只派一个长程 `implement-spec` worker。只要设计、只要规格或只要拆票，那一格的 PR 合并后停止。
 
 ```mermaid
-flowchart LR
-  G[grill-with-docs] --> S[to-spec] --> T[to-tickets] --> I[implement]
+flowchart TB
+  G[grill-with-docs] --> S[to-spec] --> T[to-tickets]
+  T --> I[implement]
   T --> IS[implement-spec]
   I --> CR[code-review]
   IS --> CR
+  CR --> SP["<br/><br/><br/><br/><br/><br/><br/><br/>"]
   classDef matt fill:#e8f7ee,stroke:#1f9254,color:#08281a
   class G,S,T,I,IS,CR matt
+  classDef gap fill:none,stroke:none,color:transparent
+  class SP gap
+  linkStyle 6 stroke:none,fill:none
 ```
 
 `tdd` 由 `implement` 和 `implement-spec` 在票内调用。需求还散、形不成稳定需求时，先用他的 [`wayfinder`](https://github.com/mattpocock/skills/blob/main/skills/engineering/wayfinder/SKILL.md) 把决策票铺开，路清了再进入 `to-spec`。
@@ -55,14 +60,20 @@ flowchart LR
 | 怎么落地 | 按目标仓库的 tracker 习惯 | 项目改动默认开 PR。门禁通过并且是双向门，coordinator 合并并同步 main |
 
 ```mermaid
-flowchart LR
+flowchart TB
   U["你说要做什么"] --> C["选中链上的一格"] --> W["新 worktree 里跑"] --> GA["按票型过门禁"] --> D{"决策或单向门？"}
   D -->|是| H["问你"]
   D -->|否| M["合并，同步 main"]
+  H --> SP["<br/><br/><br/><br/><br/><br/><br/><br/>"]
+  M --> SP
   classDef orca fill:#eef4ff,stroke:#4b74d8,color:#101828
   classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065
+  classDef gap fill:none,stroke:none,color:transparent
   class U,C,W,GA,M orca
   class D,H human
+  class SP gap
+  linkStyle 6 stroke:none,fill:none
+  linkStyle 7 stroke:none,fill:none
 ```
 
 链还要往下走时，下一格是下一次同样的循环：再派一个 worker，再开一个新的顶层 worktree。单向门留在「问你」这一支。spec 里写这个 skill 在本机的绝对路径。spec 里没写的，worker 不会做。

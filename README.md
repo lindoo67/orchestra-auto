@@ -34,13 +34,18 @@ Read [README.zh-CN.md](README.zh-CN.md) for the Chinese version of this document
 Enter at the step you already have. A single settled ticket uses `implement`. A complete map goes to one long-horizon `implement-spec` worker. A request for only design, only a spec, or only tickets stops once that step's PR is merged.
 
 ```mermaid
-flowchart LR
-  G[grill-with-docs] --> S[to-spec] --> T[to-tickets] --> I[implement]
+flowchart TB
+  G[grill-with-docs] --> S[to-spec] --> T[to-tickets]
+  T --> I[implement]
   T --> IS[implement-spec]
   I --> CR[code-review]
   IS --> CR
+  CR --> SP["<br/><br/><br/><br/><br/><br/><br/><br/>"]
   classDef matt fill:#e8f7ee,stroke:#1f9254,color:#08281a
   class G,S,T,I,IS,CR matt
+  classDef gap fill:none,stroke:none,color:transparent
+  class SP gap
+  linkStyle 6 stroke:none,fill:none
 ```
 
 `implement` and `implement-spec` call `tdd` inside the ticket. When the request is still too foggy to form a stable requirement, his [`wayfinder`](https://github.com/mattpocock/skills/blob/main/skills/engineering/wayfinder/SKILL.md) lays out decision tickets first, and `to-spec` waits until the way is clear.
@@ -57,14 +62,20 @@ The names in the diagram above stay. What changes, at each step forward, is who 
 | How the work lands | However the target repo's tracker already does it | A project change opens a PR by default. Once the gates pass and the door is two-way, the coordinator merges and syncs main |
 
 ```mermaid
-flowchart LR
+flowchart TB
   U["You say what you want"] --> C["Pick one step on his chain"] --> W["Run it in a new worktree"] --> GA["Gate for that ticket type"] --> D{"Decision or a one-way door?"}
   D -->|yes| H["Ask you"]
   D -->|no| M["Merge and sync main"]
+  H --> SP["<br/><br/><br/><br/><br/><br/><br/><br/>"]
+  M --> SP
   classDef orca fill:#eef4ff,stroke:#4b74d8,color:#101828
   classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065
+  classDef gap fill:none,stroke:none,color:transparent
   class U,C,W,GA,M orca
   class D,H human
+  class SP gap
+  linkStyle 6 stroke:none,fill:none
+  linkStyle 7 stroke:none,fill:none
 ```
 
 When the chain continues, the next step is another lap of the same loop: another worker, another new top-level worktree. A one-way door stays on the "Ask you" branch. The spec names that skill's absolute path on disk. If the spec does not say it, the worker does not do it.
