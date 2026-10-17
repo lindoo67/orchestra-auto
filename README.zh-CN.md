@@ -1,8 +1,12 @@
 # orchestra-auto
 
-用 Orca 协调 supervised workers，把已授权的开发或规划工作推进到验收与自动合并的一套工作流。
+这是一份 Orca 最佳实践，整个做法围绕 [Matt Pocock 的工程 skill](https://github.com/mattpocock/skills)。链用他的。监督、隔离、门禁和合并用 [Orca](https://www.onorca.dev/)。
 
-本仓库发布**两个可安装的 Agent Skill**，同一套流程、两种语言：
+主链保持他发布的顺序：`grill-with-docs` → `to-spec` → `to-tickets`，然后 `implement` 或 `implement-spec`，结束时 `code-review`。这些 skill 的正文以他的仓库为准。本仓库只写每一格在 Orca 里怎么跑：谁调用、worker 落在哪个 worktree、什么情况下合并、什么情况下问人。
+
+Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背书。
+
+本仓库发布**两个可安装的 Agent Skill**，同一套跑法、两种语言：
 
 | Skill | 语言 | 安装 |
 | --- | --- | --- |
@@ -13,230 +17,76 @@
 
 > **Orca 专用前提。** 两个 skill 都驱动 **Orca CLI**（`orca orchestration …`）。它们不是通用的
 > agent 编排层，未安装 Orca 或 CLI 不可达时无法工作。安装前请先读
-> [前提与能力边界](#前提与能力边界)。
+> [前提与能力边界](#前提与能力边界)。worker 还要能读到 Matt Pocock 的那些 skill，本仓库不附带它们。
 
-## 它做什么
+## 链是他的
 
-coordinator 负责规划、通信与验收；worker 负责编辑、提交与创建 PR。门禁通过后由 coordinator
-合并——不再逐张票据请人确认。完整票图交给一个长程 `implement-spec` worker：它让 implementer
-在各自 worktree 实施，合入 integration branch，只开一个集成 PR。PR 的 Merge Danger 决定最后
-一步：双向门在 G-merge 通过后自动合并，单向门保留给人类手动合并。流程错误（不是产品 bug）
-产出只读 retro 候选单，由人类选定后 worker 再落地。
+| Skill | 这一格做什么 |
+| --- | --- |
+| [`grill-with-docs`](https://github.com/mattpocock/skills/blob/main/skills/engineering/grill-with-docs/SKILL.md) | 对着代码库追问，直到这一次改动说清。术语写入术语表，难解释的决定写成 ADR |
+| [`to-spec`](https://github.com/mattpocock/skills/blob/main/skills/engineering/to-spec/SKILL.md) | 把已经说清的内容收成 spec，发到 issue tracker。这一格不再追问 |
+| [`to-tickets`](https://github.com/mattpocock/skills/blob/main/skills/engineering/to-tickets/SKILL.md) | 把计划、spec 或当前对话拆成票。每张票写明阻塞关系。他称这种票为 tracer bullet：细而完整，落地就能单独演示 |
+| [`implement`](https://github.com/mattpocock/skills/blob/main/skills/engineering/implement/SKILL.md) | 做一块已经说清的工作。按约定的 seam 走 `tdd`，提交前跑 `code-review` |
+| [`implement-spec`](https://github.com/mattpocock/skills/blob/main/skills/engineering/implement-spec/SKILL.md) | 把整份 spec 做完，落在一条 integration branch 上。票是任务图，就绪的票在各自 worktree 里并行做，结束前跑 `code-review` |
 
-skill 不会拿来交换的安全不变量：
-
-- **隔离**：每个 worker 都有自己的顶层 worktree；长程 worker 的嵌套 implementer 各有自己的
-  worktree 与分支；coordinator 绝不在 worker 的 worktree 里编辑或提交，也绝不在主工作副本上这么做。
-- **真实启动证据**：`state: ready` 不等于 turn 已开始；skill 要求按 agent 取得实际证据（或回执的
-  `turnStart: observed`）。
-- **实时 worker 设置**：worker harness 来自 Orca 的当前设置，并与当前禁用列表比对——不凭习惯、
-  不读过期快照。
-- **消息身份**：投递按 delivery ID 原子落盘、按 ID 去重，且只有在整批处理完之后才 ack。
-- **决策问人**：范围、方案分叉与 escalation 五类（凭证、第三方、付费、人工审批、不可逆
-  live 数据操作）绝不代答。单向 Merge Danger 门也必须由人类合并，不自动合并。
-- **门禁按票型**：设计票不跑源码测试；实施票不跳过自己的 review。
-- **先验收后合并**：合并等门禁；异常 diff 先留证，再谈处理。门要用 diff 核对，不能只信 PR 正文。
-- **流程错误留痕**：retro 候选单存在目标仓库之外，经人类选定后才由 worker 落地。
-- **失败有停止阈值**：有界重试、单票熔断与 run 级熔断。
-- **生命周期收尾**：已结算 worker 被 release、retain 或派 follow-up Task——没有静默遗弃。
-
-## 全流程（端到端）
-
-四个面板，按顺序读就是完整流程。蓝色是流程步骤，橙色菱形是判定，紫色是要人来定夺的地方，绿色是本轮
-终点或某条恢复流程的起点，红色是失败与打回，淡色底框是下一步之前必须全绿的打勾清单。
-
-### 1 · 把 worker 派起来（§0–§4.4）
-
-用户一句话的请求，要变成一个跑在独立顶层 worktree 里的 worker。没有 turn 启动证据，下面任何一步都到
-不了。
+已有 spec 或已有票，就从对应的那一格进入。一张已经定案的票用 `implement`。整张票图只派一个长程 `implement-spec` worker。只要设计、只要规格或只要拆票，那一格的 PR 合并后停止。
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
-flowchart TD
-    START["用户用一句话提出本轮请求"] --> DECL["§0 六栏声明：模式 / 通道 / 意图 / 前置 skill 绝对路径 / worker / 交付终点——不许写「待定」"]
-    DECL --> CH{"§1 这个请求走哪条通道？"}
-    CH -->|"A——解释、状态、讨论、口头研究结论"| ANS["直接答复：不派 worker、不写仓库"]
-    ANS --> DONE_A["没有要派的话，也没有要合并的东西"]
-    CH -->|"B——边界清楚的小改动、修 bug、已有 spec 或票"| SCOUT["§4.1 在 main 上做只读探索——终点是 spec，不是动手"]
-    CH -->|"C——多票、或需求尚未收敛的完整实施"| CONV["§1 先收敛需求与依赖：grill-with-docs、to-spec、to-tickets；G-tickets 验收票图后，一个长程 implement-spec worker"]
-    CONV --> PLAN8["§8 本轮真正需要的规划配置，由 worker 在独立 worktree 落盘、coordinator 验收"]
-    PLAN8 --> HARD
-    SCOUT --> HARD
-    HARD["§2 铁律自检：凡项目文件写入都归 worker 在其 worktree 内完成——绝不写主工作副本，绝不写 worker 的 worktree"]
-
-    HARD --> PF
-    subgraph PF["§4.0 派活前检查——逐项打勾，未全绿不 dispatch"]
-        P1["CLI 存活，编排指南已落盘"]
-        P2["通道与票型已定，票型和门禁是 spec 里的一行"]
-        P3["spec 完整：BEHAVIOR RULE 与前置 skill 路径，Target / Change / Constraints / Ownership / Observable acceptance"]
-        P4["落点显式：new-top-level、票 slug、选定的 agent"]
-        P5["spec 里每个基线数字都出自本票的 base commit"]
-        P6["实施票写明 code-review，除非 §3 豁免且理由已写下来"]
-    end
-    PF --> SETTINGS
-    SETTINGS["§0 / §4 读实时 worker 设置：当前默认 TUI agent 与禁用列表"]
-    SETTINGS --> USABLE{"所选 agent 被识别且未被禁用？"}
-    USABLE -->|"否"| FAILSTOP["§9 报精确错误并停止；绝不猜，也不擅自替换 worker"]
-    USABLE -->|"是"| DISPATCH["§4.3 worker-start --worktree new-top-level --name 票 slug --setup run --agent 所选 agent --json"]
-    DISPATCH --> TURN{"§4.3.1 回执是 turnStart: observed？"}
-    TURN -->|"是"| LIVE
-    TURN -->|"否"| PROVE{"证据能证明 turn 真的开始了？"}
-    PROVE -->|"是"| LIVE
-    PROVE -->|"否"| FAILSTOP
-    LIVE["worker 已在它自己的顶层 worktree 里跑起来——继续看面板 2 的通信闭环"]
-
-    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
-    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
-    classDef stop fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
-    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
-    class START,DECL,HARD,P1,P2,P3,P4,P5,P6,SETTINGS,DISPATCH,SCOUT,CONV,PLAN8,LIVE phase
-    class CH,USABLE,TURN,PROVE gate
-    class FAILSTOP stop
-    class ANS,DONE_A ok
+flowchart LR
+  G[grill-with-docs] --> S[to-spec] --> T[to-tickets] --> I[implement]
+  T --> IS[implement-spec]
+  I --> CR[code-review]
+  IS --> CR
+  classDef matt fill:#e8f7ee,stroke:#1f9254,color:#08281a
+  class G,S,T,I,IS,CR matt
 ```
 
-### 2 · 通信闭环（§4.5–§5）
+`tdd` 由 `implement` 和 `implement-spec` 在票内调用。需求还散、形不成稳定需求时，先用他的 [`wayfinder`](https://github.com/mattpocock/skills/blob/main/skills/engineering/wayfinder/SKILL.md) 把决策票铺开，路清了再进入 `to-spec`。
 
-最容易做错的一段：coordinator 不是在轮询，而是在被唤醒——收件器**结束进程**就是唤醒。处理批次与装回
-下一次等待是一步，提问先分类再决定谁来答。
+## 跑法变在哪
+
+上图每一格的名字不变。变的是往前走一格时，谁动手、动在哪、人要不要出面。
+
+| | 你自己调用他的 skill | 用 orchestra-auto 在 Orca 上跑 |
+| --- | --- | --- |
+| 谁推进下一格 | 你逐条调用 | coordinator 按本轮请求派一个 worker，worker 执行那一个 skill |
+| 改动落在哪 | 当前会话所在的检出 | 每个任务一个新的顶层 worktree。`implement-spec` 的 implementer 再各有自己的 worktree 和分支。coordinator 不在这些 worktree 里改文件 |
+| 人什么时候出面 | 你留在会话里往下推进 | 开头说清要做什么。决策类问题要问你：交付形态、方案分叉、范围，以及凭证、第三方、付费、人工审批、不可逆的 live 数据操作。单向 Merge Danger 门也由你合并 |
+| 怎么落地 | 按目标仓库的 tracker 习惯 | 项目改动默认开 PR。门禁通过并且是双向门，coordinator 合并并同步 main |
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
-flowchart TD
-    LIVE["worker 正在跑——这一面板就是让它持续前进的通信闭环"] --> INBOX["§4.5 每个 Run 装唯一收件器，作为 harness 能呈现的长调用——不用 nohup——台账存在仓库外"]
-
-    INBOX --> LOOP["§4.5 闭环本体：收件器在唤醒事件上结束进程，这个结束就是唤醒"]
-    LOOP --> WAKE["唤醒线：新的非心跳批次、worker 状态变化，或收件器自身出错"]
-    WAKE --> HANDLE["处理整批：核对 Run、Task、Dispatch，按 message ID 去重"]
-    HANDLE --> CLS{"§5 分类这条消息"}
-    CLS -->|"提问"| HUM["决策类或 escalation 五类：附上你的倾向请人定夺——worker 的推荐只是参考"]
-    CLS -->|"提问"| DET["细节类：coordinator 依据 ADR、spec 或用户原话代答"]
-    CLS -->|"escalation"| ESC["escalation 只冻结该票；其余票照常推进门禁"]
-    HUM --> REPLY["reply --id message-id"]
-    DET --> REPLY
-    ESC --> REPLY
-    REPLY --> ACKF["整批处理完才 ack，用那次读取快照的 deliveryId"]
-    ACKF --> REARM["装回下一次等待——唤醒之后没有新等待就是静默停摆"]
-    REARM --> WAKE
-    CLS -->|"worker_done"| ACCEPT["§6 门禁验收——面板 3"]
-    INBOX --> BOUND["harness 没有唤醒通道？把 turn 保持在 ≤60 秒的有界等待里，三轮无进展就按证据恢复"]
-    BOUND -.-> WAKE
-
-    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
-    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
-    classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
-    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
-    class LIVE,INBOX,LOOP,WAKE,HANDLE,DET,REPLY,ACKF,REARM,BOUND phase
-    class CLS gate
-    class HUM,ESC human
-    class ACCEPT ok
+flowchart LR
+  U["你说要做什么"] --> C["选中链上的一格"] --> W["新 worktree 里跑"] --> GA["按票型过门禁"] --> D{"决策或单向门？"}
+  D -->|是| H["问你"]
+  D -->|否| M["合并，同步 main"]
+  classDef orca fill:#eef4ff,stroke:#4b74d8,color:#101828
+  classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065
+  class U,C,W,GA,M orca
+  class D,H human
 ```
 
-### 3 · 验收、合并与收尾（§6–§7）
+链还要往下走时，下一格是下一次同样的循环：再派一个 worker，再开一个新的顶层 worktree。单向门留在「问你」这一支。spec 里写这个 skill 在本机的绝对路径。spec 里没写的，worker 不会做。
 
-`worker_done` 不等于验收通过：先跑收尾检查，再按票型选门禁，只有全绿才进入合并。同一票同门禁连续失败
-两次暂停该票；跨票打回累计五次暂停整个 run。
+下面这些情况仍用他的 skill：
 
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
-flowchart TD
-    ACCEPT["面板 2 的 worker_done 送到这里——门禁验收起点"] --> NOISE{"§4.0.1 收尾检查：在 worktree 里 git status --porcelain 与 diff --numstat"}
-    NOISE -->|"万行级"| REFORM["格式化重排噪声：先留证，由 worker 恢复，然后打回"]
-    NOISE -->|"正常未提交改动"| WHY["追问 worker 为什么还有未提交内容——不默认接受"]
-    NOISE -->|"干净"| PROP["§3 / §6 深度：可圈定的单票跑受影响测试，共享接口或影响面不明跑全量；省略双轴 review 必须把理由写进 spec 与 Answer"]
-    REFORM --> SEND
-    WHY --> SEND
-    PROP --> GATES["§6 按票型选门禁：研究查来源 / G-docs / G-wayfinder / G-spec / G-tickets / G-impl"]
-    GATES --> GREEN{"门禁在可观察结果与证据上全绿？"}
-    GREEN -->|"否"| SEND["打回：哪个门禁没过、缺什么证据、具体要补什么"]
-    SEND --> BREAK{"同一票同门禁连续失败两次，或 run 级打回累计五次？"}
-    BREAK -->|"是"| STOP9["§9 停止派活，把人要的状态与证据交给人"]
-    BREAK -->|"否"| RECYCLE["派 follow-up Task，或对复用终端写明原 worktree selector；新 turn 重跑 §4.3.1——回到面板 2 的闭环"]
-    GREEN -->|"是"| MERGE["§6 在最终集成 head 上跑 G-merge：用 diff 核对 PR 的 Door 声明；双向门也必须门禁全绿"]
-    MERGE --> EXC{"单向门或拿不准、用户明确要求保留 PR，或有规则/门禁挡住？"}
-    EXC -->|"是"| KEEP["保留 PR；单向门由人类手动合并；如实报告状态与确切合并动作"]
-    EXC -->|"否"| SYNC["双向门：自动合并，再按 §6.5.1 只在干净副本上拉取已合并 main，并用 merge-base --is-ancestor 校验"]
-    KEEP --> REPORT
-    SYNC --> LIFE["§6.5 worker 生命周期：follow-up、retain 或 release，然后查 reclaimable 并逐项结清"]
-    LIFE --> REPORT["§7 收口报告写在 repo 外持久目录：产物与合并 SHA、验收证据、人定决策、未完成项、生命周期清点"]
-    REPORT --> DONE_B["§7 到达约定交付终点即停止——通常是项目改动已合并"]
+| 情况 | skill |
+| --- | --- |
+| 修 bug | [`diagnosing-bugs`](https://github.com/mattpocock/skills/blob/main/skills/engineering/diagnosing-bugs/SKILL.md)，然后 `implement` |
+| 必须落盘的研究 | [`research`](https://github.com/mattpocock/skills/blob/main/skills/engineering/research/SKILL.md) |
+| 外部 issue | [`triage`](https://github.com/mattpocock/skills/blob/main/skills/engineering/triage/SKILL.md) |
+| 术语没对齐 | [`domain-modeling`](https://github.com/mattpocock/skills/blob/main/skills/engineering/domain-modeling/SKILL.md) |
+| 流程出错，不是产品 bug | [`retro`](https://github.com/mattpocock/skills/blob/main/skills/engineering/retro/SKILL.md)。候选写在目标仓库外，人选定之后才由 worker 落地 |
 
-    classDef phase fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
-    classDef gate fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
-    classDef human fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
-    classDef stop fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
-    classDef ok fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
-    class ACCEPT,NOISE,WHY,PROP,GATES,MERGE,SYNC,LIFE,REPORT phase
-    class GREEN,BREAK,EXC gate
-    class STOP9 human
-    class REFORM,SEND,KEEP,RECYCLE stop
-    class DONE_B ok
-```
+Orca 上多出来的约束：
 
-### 4 · 失败分支（§9）
+- coordinator 做规划、派活、应答和验收。项目文件的修改、提交和 PR 正文由 worker 在该票的 worktree 里完成。
+- `state: ready` 只说明 dispatch 就绪。turn 是否开始，看 `turnStart: observed`，或该 agent 实际支持的证据。
+- worker 用的 agent 来自 Orca 当前设置，并避开当前禁用列表。
+- 决策类问题先问人。worker 给出的推荐只作参考。
+- 门禁按票型选。设计票不跑源码测试，实施票不跳过自己的 review。可圈定的小改动可以省略双轴 review，理由写进 spec 和 Answer。
+- 异常 diff 先留证。失败先取证，再决定要不要重派。
 
-失败不是一个节点：每个入口都有自己的处置流程，而它们的共同形状是——先取证、再决定、报精确错误、绝不
-无条件 relaunch。
-
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 18, "rankSpacing": 22, "padding": 6, "diagramPadding": 4, "useMaxWidth": true}}}%%
-flowchart TD
-    E1["CLI 起不来，或取不到编排指南"] --> R1A["报精确错误并停止——不换可执行文件，不猜命令"]
-
-    E2["worker-start 回执 state: failed"] --> R2A["① 读回执四字段：failedStage / lastError / recovery / residualResources"]
-    R2A --> R2B["② 三条只读命令：terminal show、git worktree list、terminal read"]
-    R2B --> R2C{"终端还在、worktree 已建、setup 零输出退出？"}
-    R2C -->|"是——是 readiness 判早，不是票的问题"| R2D{"③ 在该 worktree 里手跑仓库的 setup 命令"}
-    R2C -->|"否"| R2E["查真实错误——不盲目重派"]
-    R2D -->|"通过——瞬时竞态，重派安全"| R2F["④ 读 recovery 参考，⑤ 先 worker-release 失败 Dispatch，⑥ 用 --retry-of 配 --task 并显式给落点重派"]
-    R2D -->|"失败"| R2E
-    R2F --> R2G["重新确认 turn 开始——ready 回执依然什么都不证明"]
-
-    E3["Orca app 运行中死掉或重启"] --> R3A["① orca status --json 确认 app 已起——在此之前不发任何编排命令"]
-    R3A --> R3B["② worker-list --include-remote --json 清点每个 Dispatch；Run、Task、终端状态由 Orca 持久化，扛得住重启"]
-    R3B --> R3C["③ 重装收件器，并逐个重确认在跑 worker 的 turn"]
-    R3B -.-> R3D["重启不构成 worker 已死的证据"]
-
-    E4["消息从 worker 出去了，coordinator 就是没收到"] --> R4A["按顺序查五个断点：唤醒、队头未 ack、身份或邮箱、消费者死亡、worker 根本没发"]
-    R4A --> R4B["三源对账：本地 --status 与 deliveries、服务端 check --all、worker-list / worker-show / worker-read"]
-    R4B --> R4C{"生命周期分支"}
-    R4C -->|"已结算但无 worker_done"| R4D["对账产物后继续验收——不要求重发，不派第二个编辑"]
-    R4C -->|"turn 结束、未结算"| R4E["确认终端仍属原 Dispatch，再发一次收据提醒"]
-    R4C -->|"liveness 无法证实或标题空闲"| R4F["这只是缺证据：不停止、不 release、不重派"]
-    R4C -->|"绑定丢失或 consumer_fenced"| R4G["停手，核对真实调用身份，绝不冒用 handle"]
-
-    E5["worker 卡在权限提示上，或 turn 始终没被确认"] --> R5A["读它请求的操作、目标路径与风险，只批准本轮已授权的操作"]
-    R5A --> R5B["额外的权限、第三方账号、付费或不可逆操作，按 §5 请人定夺"]
-    R5B -.-> R5C["Enter 从来不是万能批准，绕过模式也不是捷径"]
-
-    E6["worker 报完后出现万行级未提交改动"] --> R6A["先留证：worktree patch、index patch、untracked 清单"]
-    R6A --> R6B["逐文件比对 HEAD、index、工作区与 worker 的编辑记录"]
-    R6B --> R6C["确认并备份完每个真实改动之后才可恢复该文件——恢复由 worker 做，coordinator 负责验收"]
-    R6C -.-> R6D["本地 formatter 覆盖是确认性失败的修复，不是每个票的固定前置"]
-
-    R1A ~~~ E2
-    R2E ~~~ E3
-    R2G ~~~ E3
-    R3C ~~~ E4
-    R3D ~~~ E4
-    R4D ~~~ E5
-    R4E ~~~ E5
-    R4F ~~~ E5
-    R4G ~~~ E5
-    R5B ~~~ E6
-    R5C ~~~ E6
-
-    classDef fail fill:#ffecec,stroke:#d13438,color:#5a0d0d,stroke-width:1.5px
-    classDef step fill:#eef4ff,stroke:#4b74d8,color:#101828,stroke-width:1.5px
-    classDef ask fill:#f3e8ff,stroke:#8b5cf6,color:#2e1065,stroke-width:1.5px
-    classDef branch fill:#fff4e5,stroke:#c77700,color:#3b2400,stroke-width:1.5px
-    classDef entry fill:#e8f7ee,stroke:#1f9254,color:#08281a,stroke-width:1.5px
-    class R1A,R2E,R3D,R4G,R6D fail
-    class R2A,R2B,R2F,R2G,R3A,R3B,R3C,R4A,R4B,R4D,R4E,R4F,R5A,R6A,R6B,R6C step
-    class R2C,R2D,R4C branch
-    class R5B,R5C ask
-    class E1,E2,E3,E4,E5,E6 entry
-```
+派活参数、收件、打回和熔断写在 [SKILL.md](skills/orchestra-auto-zh/SKILL.md)。上面两张图只保留他的链，以及这条链被 Orca 接住之后的那一圈。
 
 ## 安装
 
@@ -295,12 +145,13 @@ skill。跑 `orca skills install --skill orchestra-auto` 会报 `Unknown skill`�
 | --- | --- |
 | Node.js 与 `npx` | 社区 `skills` CLI 通过 `npx` 运行，安装命令需要本机装有 Node.js。除此之外本仓库不需要 Node。 |
 | Orca | 已安装 [Orca](https://www.onorca.dev/) 且 CLI 可达。skill 会调用 `orca orchestration worker-start`、`check`、`send`、`reply`、`worker-release` 等。 |
+| Matt Pocock 的工程 skill | worker 要读到的是他的 skill，不是本仓库里的副本。[`grill-with-docs`](https://github.com/mattpocock/skills/blob/main/skills/engineering/grill-with-docs/SKILL.md)、[`to-spec`](https://github.com/mattpocock/skills/blob/main/skills/engineering/to-spec/SKILL.md)、[`to-tickets`](https://github.com/mattpocock/skills/blob/main/skills/engineering/to-tickets/SKILL.md)、[`implement`](https://github.com/mattpocock/skills/blob/main/skills/engineering/implement/SKILL.md)、[`implement-spec`](https://github.com/mattpocock/skills/blob/main/skills/engineering/implement-spec/SKILL.md)，以及它们会调用的 `tdd` 和 `code-review`，需已安装并能被 worker 读取。spec 里写绝对路径。 |
 | Orca CLI 可执行文件 | 按 Orca 文档的方式解析：`ORCA_CLI_COMMAND` → 平台二进制名 → `orca`。 |
 | Orca 的 `orchestration` 指南 | skill 要求 coordinator 用 `orca skills get orchestration` 取回它，并以**实时**指南为准，而不是以 skill 自己的叙述为准。 |
 | worker agent | 你的 Orca profile 已启用的那些 TUI agent。skill 读取当前默认值与当前禁用列表，而不是写死某一个。 |
 | Python 3 | 仅用于可选的内置收件循环（只用标准库：POSIX 文件锁，故限 macOS/Linux/WSL）。 |
 
-**能力边界。** 这套流程是针对 Orca 的 orchestration 动词写的。其中的判断——通道选择、门禁选择、
+**能力边界。** 规划链是 Matt Pocock 的，本仓库不重新定义那些 skill 做什么。编排动词是 Orca 的。其中的判断——通道选择、门禁选择、
 决策分类——是可以迁移的，别的编排器也能借鉴；但*命令*不可移植，skill 也不会假装它可以。
 如果你的 CLI 不提供 `orca orchestration`，这个 skill 不适合你。
 
@@ -407,7 +258,7 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 ├── skills/
 │   ├── orchestra-auto/         英文包
 │   │   ├── SKILL.md            路由与核心约束
-│   │   ├── references/         按条件读取的细节，9 个文件
+│   │   ├── references/         按条件读取的细节，12 个文件
 │   │   ├── scripts/            可选的收件循环
 │   │   ├── evals/evals.json    提示词层面的场景
 │   │   └── eval.yaml           可选的外部 skill runner 用例
@@ -419,15 +270,14 @@ python3 -c "import json,glob;[json.load(open(p)) for p in glob.glob('skills/*/ev
 
 ## 状态与范围
 
-- 这套流程对**过程**有主张，对你的产品没有：它不会替你决定做什么，拿不准就升级而不是猜。
+- 这套流程主张的是 **Matt Pocock 的 skill 在 Orca 上怎么跑**，不替你决定产品做什么。拿不准就升级，而不是猜。
 - `launch-kit/` 下的发布材料是**草稿**。它们存在的意义是让维护者在审阅后自己发出去。准备这些
   材料不涉及登录账号、不接触社区、不代为发帖。
 - 本仓库只放已发布的包、它们的检查与文档，不含 Orca 本身。
 
 ## 致谢
 
-本仓库的监督式协作与 Agent Skills 流程，灵感来自 [Matt Pocock 公开的 agent skills](https://github.com/mattpocock/skills)
-及其相关工程实践思路。本仓库将这些思路落地到 Orca（`orca orchestration`），由本仓库自行实现并适配；Matt Pocock 未参与本项目的开发或维护，也未为本项目背书。可参阅 [Matt Pocock 的 GitHub 个人资料](https://github.com/mattpocock)。
+规划链用的是 [Matt Pocock 公开的工程 skill](https://github.com/mattpocock/skills)。本仓库写的是这些 skill 在 Orca（`orca orchestration`）上的监督式跑法，由本仓库实现。Matt Pocock 没有参与开发或维护，也没有背书。个人资料见 [github.com/mattpocock](https://github.com/mattpocock)。
 
 ## 许可
 
