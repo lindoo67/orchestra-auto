@@ -23,9 +23,9 @@ Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背�
 
 派活容易，最后 20% 才难——supervised Orca 编排 skills。
 
-[![演示视频](docs/demo/orchestra-auto-poster.jpg)](https://github.com/whutlichao/orchestra-auto/releases/download/demo-video/orchestra-auto.mp4)
+<video src="https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6" controls width="720" poster="docs/demo/orchestra-auto-poster.jpg"></video>
 
-[观看演示视频（MP4）](https://github.com/whutlichao/orchestra-auto/releases/download/demo-video/orchestra-auto.mp4)
+[观看演示视频（MP4）](https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6)
 
 ## 链是他的
 
