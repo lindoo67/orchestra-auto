@@ -21,6 +21,14 @@ Read [README.zh-CN.md](README.zh-CN.md) for the Chinese version of this document
 > See [Prerequisites and capability boundary](#prerequisites-and-capability-boundary) before you
 > install. A worker also needs Matt Pocock's skills on disk. This repository does not ship them.
 
+## Demo
+
+Dispatch is easy; the last 20% is the hard part — supervised Orca orchestration skills.
+
+<video src="docs/demo/orchestra-auto.mp4" controls width="720"></video>
+
+[Watch the demo (MP4)](docs/demo/orchestra-auto.mp4)
+
 ## The chain is his
 
 | Skill | What that step does |

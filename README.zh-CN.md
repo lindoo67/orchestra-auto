@@ -19,6 +19,14 @@ Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背�
 > agent 编排层，未安装 Orca 或 CLI 不可达时无法工作。安装前请先读
 > [前提与能力边界](#前提与能力边界)。worker 还要能读到 Matt Pocock 的那些 skill，本仓库不附带它们。
 
+## Demo
+
+派活容易，最后 20% 才难——supervised Orca 编排 skills。
+
+<video src="docs/demo/orchestra-auto.mp4" controls width="720"></video>
+
+[观看演示视频（MP4）](docs/demo/orchestra-auto.mp4)
+
 ## 链是他的
 
 | Skill | 这一格做什么 |
