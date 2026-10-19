@@ -2,34 +2,25 @@
 
 An Orca best practice built around [Matt Pocock's engineering skills](https://github.com/mattpocock/skills). The chain is his. Supervision, isolation, gates and merging are [Orca](https://www.onorca.dev/)'s.
 
-The main chain stays in the order he publishes it: `grill-with-docs` → `to-spec` → `to-tickets`, then `implement` or `implement-spec`, closing with `code-review`. The text of those skills lives in his repository. This repository only says how each step runs on Orca: who invokes it, which worktree the worker lands in, when a merge is automatic, and when a human is asked.
-
-Matt Pocock has not worked on this repository or maintained it, and he does not endorse it.
-
-This repository publishes **two installable Agent Skills** that carry the same practice in two
-languages:
-
-| Skill | Language | Install |
-| --- | --- | --- |
-| [`orchestra-auto`](skills/orchestra-auto/SKILL.md) | English | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto` |
-| [`orchestra-auto-zh`](skills/orchestra-auto-zh/SKILL.md) | 简体中文 | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto-zh` |
-
-Read [README.zh-CN.md](README.zh-CN.md) for the Chinese version of this document.
-
-> **Orca prerequisite.** Both skills drive the **Orca CLI** (`orca orchestration …`). They are not a
-> general agent-orchestration layer and do not work without Orca installed and its CLI reachable.
-> See [Prerequisites and capability boundary](#prerequisites-and-capability-boundary) before you
-> install. A worker also needs Matt Pocock's skills on disk. This repository does not ship them.
-
-## Demo
-
 Dispatch is easy; the last 20% is the hard part — supervised Orca orchestration skills.
 
 <video src="https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6" controls width="720" poster="docs/demo/orchestra-auto-poster.jpg"></video>
 
 [Watch the demo (MP4)](https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6)
 
+```bash
+npx skills add whutlichao/orchestra-auto --skill orchestra-auto
+```
+
+Two installable Agent Skills carry the same practice in two languages. This command installs the
+English one; the 简体中文 variant is `--skill orchestra-auto-zh` (see [Install](#install)). Chinese
+readers can start from [README.zh-CN.md](README.zh-CN.md).
+
+Matt Pocock has not worked on this repository or maintained it, and he does not endorse it.
+
 ## The chain is his
+
+The main chain stays in the order he publishes it: `grill-with-docs` → `to-spec` → `to-tickets`, then `implement` or `implement-spec`, closing with `code-review`. The text of those skills lives in his repository. This repository only says how each step runs on Orca: who invokes it, which worktree the worker lands in, when a merge is automatic, and when a human is asked.
 
 | Skill | What that step does |
 | --- | --- |
@@ -111,6 +102,14 @@ Dispatch flags, the inbox, send-backs and the breakers live in [SKILL.md](skills
 
 ## Install
 
+This repository publishes **two installable Agent Skills** that carry the same practice in two
+languages:
+
+| Skill | Language | Install |
+| --- | --- | --- |
+| [`orchestra-auto`](skills/orchestra-auto/SKILL.md) | English | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto` |
+| [`orchestra-auto-zh`](skills/orchestra-auto-zh/SKILL.md) | 简体中文 | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto-zh` |
+
 Both skills install with the community [`skills` CLI](https://github.com/vercel-labs/skills)
 (`npx skills add …,`). Pick the language variant you want; they are independent bundles, not a
 translation fallback, so installing both is fine if your team is bilingual.
@@ -141,6 +140,11 @@ npx skills add ./orchestra-auto --skill orchestra-auto --skill orchestra-auto-zh
 Orca bundles in its local registry. Running `orca skills install --skill orchestra-auto` fails with
 `Unknown skill`, because these packages are not in that registry — use the `npx skills add` commands
 above for this repository.
+
+> **Orca prerequisite.** Both skills drive the **Orca CLI** (`orca orchestration …`). They are not a
+> general agent-orchestration layer and do not work without Orca installed and its CLI reachable.
+> See [Prerequisites and capability boundary](#prerequisites-and-capability-boundary) before you
+> install. A worker also needs Matt Pocock's skills on disk. This repository does not ship them.
 
 ### What the install command does, and does not do
 
