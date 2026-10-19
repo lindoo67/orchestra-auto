@@ -2,32 +2,24 @@
 
 这是一份 Orca 最佳实践，整个做法围绕 [Matt Pocock 的工程 skill](https://github.com/mattpocock/skills)。链用他的。监督、隔离、门禁和合并用 [Orca](https://www.onorca.dev/)。
 
-主链保持他发布的顺序：`grill-with-docs` → `to-spec` → `to-tickets`，然后 `implement` 或 `implement-spec`，结束时 `code-review`。这些 skill 的正文以他的仓库为准。本仓库只写每一格在 Orca 里怎么跑：谁调用、worker 落在哪个 worktree、什么情况下合并、什么情况下问人。
-
-Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背书。
-
-本仓库发布**两个可安装的 Agent Skill**，同一套跑法、两种语言：
-
-| Skill | 语言 | 安装 |
-| --- | --- | --- |
-| [`orchestra-auto`](skills/orchestra-auto/SKILL.md) | English | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto` |
-| [`orchestra-auto-zh`](skills/orchestra-auto-zh/SKILL.md) | 简体中文 | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto-zh` |
-
-英文说明见 [README.md](README.md)。
-
-> **Orca 专用前提。** 两个 skill 都驱动 **Orca CLI**（`orca orchestration …`）。它们不是通用的
-> agent 编排层，未安装 Orca 或 CLI 不可达时无法工作。安装前请先读
-> [前提与能力边界](#前提与能力边界)。worker 还要能读到 Matt Pocock 的那些 skill，本仓库不附带它们。
-
-## Demo
-
 派活容易，最后 20% 才难——supervised Orca 编排 skills。
 
 <video src="https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6" controls width="720" poster="docs/demo/orchestra-auto-poster.jpg"></video>
 
 [观看演示视频（MP4）](https://github.com/user-attachments/assets/c375a505-a7eb-436a-89d3-e08bce5f16f6)
 
+```bash
+npx skills add whutlichao/orchestra-auto --skill orchestra-auto
+```
+
+本仓库发布**两个可安装的 Agent Skill**，同一套跑法、两种语言。上面这条装的是英文版；简体中文版是
+`--skill orchestra-auto-zh`（见 [安装](#安装)）。英文说明见 [README.md](README.md)。
+
+Matt Pocock 没有参与本仓库的开发或维护，也没有为本仓库背书。
+
 ## 链是他的
+
+主链保持他发布的顺序：`grill-with-docs` → `to-spec` → `to-tickets`，然后 `implement` 或 `implement-spec`，结束时 `code-review`。这些 skill 的正文以他的仓库为准。本仓库只写每一格在 Orca 里怎么跑：谁调用、worker 落在哪个 worktree、什么情况下合并、什么情况下问人。
 
 | Skill | 这一格做什么 |
 | --- | --- |
@@ -109,6 +101,13 @@ Orca 上多出来的约束：
 
 ## 安装
 
+本仓库发布**两个可安装的 Agent Skill**，同一套跑法、两种语言：
+
+| Skill | 语言 | 安装 |
+| --- | --- | --- |
+| [`orchestra-auto`](skills/orchestra-auto/SKILL.md) | English | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto` |
+| [`orchestra-auto-zh`](skills/orchestra-auto-zh/SKILL.md) | 简体中文 | `npx skills add whutlichao/orchestra-auto --skill orchestra-auto-zh` |
+
 两个 skill 都用社区 [`skills` CLI](https://github.com/vercel-labs/skills) 安装
 （`npx skills add …`）。按需要选语言版本；它们是两个独立包，不是互备的翻译兜底，团队双语的话
 两个都装也可以。
@@ -137,6 +136,10 @@ npx skills add ./orchestra-auto --skill orchestra-auto --skill orchestra-auto-zh
 `orca skills install` 是 Orca 自己对同一条 `npx` 命令的封装，但它只覆盖 Orca 本地注册表里的那些
 skill。跑 `orca skills install --skill orchestra-auto` 会报 `Unknown skill`——这两个包不在那个注册表
 里；本仓库请用上面的 `npx skills add` 命令。
+
+> **Orca 专用前提。** 两个 skill 都驱动 **Orca CLI**（`orca orchestration …`）。它们不是通用的
+> agent 编排层，未安装 Orca 或 CLI 不可达时无法工作。安装前请先读
+> [前提与能力边界](#前提与能力边界)。worker 还要能读到 Matt Pocock 的那些 skill，本仓库不附带它们。
 
 ### 安装这条命令做了什么、没做什么
 
