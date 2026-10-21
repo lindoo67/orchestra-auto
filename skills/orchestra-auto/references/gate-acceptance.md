@@ -43,10 +43,13 @@ question per §5.
    behaviour leaves observable red→green evidence. Pure copy, style or configuration changes prove
    the result with real rendering, a check, or an applicable test. A UI ticket's evidence must land
    on text, elements, accessible names or real browser behaviour produced by the product.
-2. **Quality**: run the project's applicable typecheck, lint and format gates. If the repository
-   has pre-existing problems, obtain a comparable baseline on **this ticket's** base commit and
-   report the number of newly introduced problems; a log from another branch is not this
-   ticket's baseline.
+2. **Quality**: run the static checks, lint and format gates the project actually has, as the
+   repository's own configuration defines them — a TS typecheck, Python's mypy/ruff, `go vet`,
+   Rust's clippy/fmt are examples by language, not a required checklist. When the repository has no
+   gate of some kind, do not invent one: state "this project has no such gate" in the report rather
+   than raising a false red over a missing tool. If the repository has pre-existing problems,
+   obtain a comparable baseline on **this ticket's** base commit and report the number of newly
+   introduced problems; a log from another branch is not this ticket's baseline.
 3. **Review and coverage**: the Answer gives execution evidence for the pre-skill. When a
    two-axis code review is required, give the Standards and Spec conclusions separately, with
    findings and their disposition; the small-ticket exemption in §3 is allowed only when the
