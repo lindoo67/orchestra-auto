@@ -37,15 +37,19 @@ question per §5.
    than reverting outright.
 1. **Behaviour and tests**: run the repository's existing tests as the blast radius dictates. A
    single ticket with a bounded radius runs the affected tests; a shared interface, build
-   configuration, types, or an unclear radius runs the full suite. A fix's test should fail
-   before the fix and pass after it; new behaviour leaves observable red→green evidence. Pure
-   copy, style or configuration changes prove the result with real rendering, a check, or an
-   applicable test. A UI ticket's evidence must land on text, elements, accessible names or real
-   browser behaviour produced by the product.
-2. **Quality**: run the project's applicable typecheck, lint and format gates. If the repository
-   has pre-existing problems, obtain a comparable baseline on **this ticket's** base commit and
-   report the number of newly introduced problems; a log from another branch is not this
-   ticket's baseline.
+   configuration, types, or an unclear radius runs the full suite. Do not run the full suite
+   repeatedly locally on the same code: the final head is settled by CI, or by one local full run
+   when CI cannot cover it. A fix's test should fail before the fix and pass after it; new
+   behaviour leaves observable red→green evidence. Pure copy, style or configuration changes prove
+   the result with real rendering, a check, or an applicable test. A UI ticket's evidence must land
+   on text, elements, accessible names or real browser behaviour produced by the product.
+2. **Quality**: run the static checks, lint and format gates the project actually has, as the
+   repository's own configuration defines them — a TS typecheck, Python's mypy/ruff, `go vet`,
+   Rust's clippy/fmt are examples by language, not a required checklist. When the repository has no
+   gate of some kind, do not invent one: state "this project has no such gate" in the report rather
+   than raising a false red over a missing tool. If the repository has pre-existing problems,
+   obtain a comparable baseline on **this ticket's** base commit and report the number of newly
+   introduced problems; a log from another branch is not this ticket's baseline.
 3. **Review and coverage**: the Answer gives execution evidence for the pre-skill. When a
    two-axis code review is required, give the Standards and Spec conclusions separately, with
    findings and their disposition; the small-ticket exemption in §3 is allowed only when the
@@ -78,15 +82,15 @@ question per §5.
    here: leave it open and report the exact human merge action. Never auto-merge a one-way door.
 
 Check the repository's conventions for CI and merging first. Separate known baseline failures
-from real failures this ticket introduced; a locally equivalent gate must still pass. For several
-PRs, an integration worker composes the final heads in an isolated worktree in the merge method
-and DAG order you intend to use, recording the base, each head SHA and every step's tree SHA;
-the coordinator checks the combined result and runs the applicable full gate or equivalent CI on
-the final tree. A single PR gets the same verification on its final head. Fix a PR first on a
-combined conflict or a real red; once any head or the target base changes, re-judge whether the
-earlier evidence still covers what you intend to merge. For a two-way PR, all gates green means
-§6.5's automatic merge, with no further user confirmation; when the user explicitly asked to keep
-an open PR, stop here.
+from real failures this ticket introduced. For several PRs, an integration worker composes the
+final heads in an isolated worktree in the merge method and DAG order you intend to use, recording
+the base, each head SHA and every step's tree SHA; the coordinator checks the combined result and
+runs the applicable full gate on the final tree — CI by default, and only when the repository has
+no usable CI, one equivalent local full run instead. A single PR gets the same verification on its
+final head. Fix a PR first on a combined conflict or a real red; once any head or the target base
+changes, re-judge whether the earlier evidence still covers what you intend to merge. For a two-way
+PR, all gates green means §6.5's automatic merge, with no further user confirmation; when the user
+explicitly asked to keep an open PR, stop here.
 
 ### §6.5 Merge execution and teardown
 
