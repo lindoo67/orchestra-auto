@@ -250,7 +250,7 @@ Do **not** write a submission post — there is no submission channel. What a ma
 > to wake the coordinator, decisions escalated to a human, gates by ticket type, evidence preserved
 > before any revert, bounded retries.
 >
-> 20 scenarios per language in `evals/`, plus real behaviour tests for the inbox script (atomic
+> 29 scenarios per language in `evals/`, plus real behaviour tests for the inbox script (atomic
 > writes, replay safety, ack discipline, the wake line, loud failure). MIT. Feedback welcome.
 
 ### 6.4 X / Twitter
