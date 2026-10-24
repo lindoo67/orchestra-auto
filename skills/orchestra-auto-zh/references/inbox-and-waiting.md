@@ -70,6 +70,15 @@ ORCA_CLI_COMMAND=<已确认的可执行文件路径> <SKILL_DIR>/scripts/inbox-l
 维护逐 message ID 的台账：`received → processing → handled`，记录 reply 回执、验收结果、
 终端归属决定。恢复时先对账；重复 Delivery 不重复回复、不重复合并或 release。
 
+`processing` 这一条要写在它所描述的动作**之前**，绝不写在其后，并且要写明动作是什么（一次合并、
+一个 `reply --id`、一次文件改动）以及属于哪个 attempt。顺序就是全部要害：动作可能已经完成、进程
+在任何记录存在之前就死了；而 ack 要等整批处理完才发，所以批仍处于未 ack 状态，而它的效果可能已经
+落地。事后补写的台账分不清这种情况和「根本没跑过」，而收件器给的是 at-least-once 投递加不重复
+唤醒——它不给 exactly-once 效果。所以恢复时一条卡在 `processing` 的记录意味着**先确立事实再决定
+是否重放**：读真实状态（PR 是否已合并、reply 是否已送达、文件是否已改），据证据判断，而不是据台账
+判断。效果可验证且动作幂等时，用同一个 delivery ID 重放是安全的；效果无法从证据确立时，交给人类，
+绝不盲目重跑——未经核实的重放绝不能只凭台账推断出来。
+
 1. 读完整 Delivery，验证其 Run/Task/Dispatch 属于本轮权威 attempt；旧 attempt 消息保留作证据，
    不据此完成新 attempt。
 2. 提问用 `reply --id <message_id>` 回答；待人工决定的记录为 pending，不能超时自答。
@@ -217,6 +226,7 @@ heartbeat 消息无关。脚本把该子进程的流放在自己的文件里，k
 | --- | --- | --- |
 | 唤醒 | worker_done 已在盘上或队列里，但协调者的 turn 早已结束、没有东西起新 turn：delivery 文件比你上一次 turn 更新，或 `NEW-MESSAGE` 早已过期，而 §3 的唤醒方式从未被确认 | `send` 成功只证明 durable enqueue；wake/nudge 是 best-effort。先确认自己处在 §3 哪一档：harness 能呈现作业完成时，收件器的结束——§3.1 那行唤醒——**就是**唤醒；若它始终没来，核对收件器是否按 §3.2 装的（而不是 `nohup`），以及上一次唤醒后是否装回了下一次等待（§3.4）。没有这种 harness 就停在 §3.3 的有界档，或在结束 turn 前记录无法自动唤醒的状态。绝不能把「进程还活着」当成「我会被叫醒」 |
 | FIFO 头部未 ack | 早先消息正常，之后的 worker_done 再不出现，批次头部压着一条未回答的提问或决策 | `check` 返回 Run 下**最老未 ack** 的 Delivery，并一直重放这一批直到 `--ack`，所以一批没 ack 就挡住它后面的一切。整批处理完再 ack 该快照的 `deliveryId`（§2 第 3 条）。人类决策堵住头部时，用只读 `check --all` 读后续消息（§2 第 4 条）；`--all` 从不出产可 ack 的 ID。ack 不是回复 |
+| 动作被打断 | 批仍是未 ack，台账那条停在 `processing`，进程死在「做完事」和「记下事」之间——所以效果可能已经落地 | 先确立事实再重放（§2）：读真实状态——合并查 `pr view`、回复查回执、文件就读文件本身。只有效果可验证且动作幂等时，才用同一个 delivery ID 重放；无法从证据确立的效果交给人类，不要盲目重跑。这就是 `runtime_unavailable` 那条判断往上一层：变更可能已经生效，所以要证明它、或者去问，绝不假设 |
 | 身份/邮箱 | 哪个收件箱都收不到，或消息落在你没在看的地方 | `check` 用 `--terminal <handle>` 认调用方且不接受 `--from`；从终端标题、"最新终端"或别的会话/Run 拿来的 handle 指向错误邮箱。handle 取自真实调用方身份（`orca status --json`）并写入台账。worker_done/heartbeat 不能发组地址，其 sender handle 必须精确等于 dispatch assignee，否则该任务永不结算 |
 | 收件器已死 | 彻底安静（连心跳也没有）：`--status` 报 DEAD 且 `phase=error`、或 `watch.log` 有 `ERROR` 行；或收到的唤醒行 `reason=error` | 脚本刻意把 CLI 失败、JSON 错误与绑定丢失落盘并非零退出，一次停止从不等价于空队列——而且那次停止本身就是一次唤醒（§3.1）。判死看 `state.json`，不要只看 pid 文件（§1）。读 `ERROR` 行与 `detail`；绑定/waiter 问题通常意味着别的实例或别的 Run 的 loop 占走了槽。在重新下发任何东西之前，先按 CLI 自己给出的恢复指引走：`runtime_unavailable` 错误会附带 `request-show --request <id>` 指引，而那次改动可能已经生效；用 `request-show` 确认、再用 `--retry-request <id>` 重放，而不是当成一次全新尝试。收件器自己从不重试。waiter 槽是跨目录资源：起新 loop 前先确认并停掉旧 loop，绝不迁移旧状态目录 |
 | worker 压根没发 | 只收到心跳，或收到声称成功的 plain final；被自动 ack 的纯心跳批次看着有流量，实际什么也没报 | 把 §4 的通信契约写进 spec，并按 5.3 分类 |

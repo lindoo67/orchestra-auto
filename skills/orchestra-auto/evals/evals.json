@@ -786,6 +786,31 @@
           "name": "why_cites_rule"
         }
       ]
+    },
+    {
+      "id": 29,
+      "name": "interrupted-action-needs-evidence",
+      "prompt": "You are running orchestra-auto. A batch was persisted and woke you, and your ledger shows message `m-8842` at `processing`: a `worker_done` whose required action was to merge its ticket PR. The process died mid-turn. On restart the batch is still unacknowledged server-side and its delivery file is still on disk.\n\nOutput only:\n1. STATE: what you can and cannot conclude from the ledger entry\n2. RECOVERY: what you do before any replay of that action\n3. IF_UNVERIFIABLE: what you do when the effect cannot be established from evidence\n4. WHY: one or two sentences\nDo not run commands.",
+      "expected_output": "The ledger entry records that an action was attempted, not that it completed and not that it failed: an entry stuck at `processing` cannot distinguish \"the action landed and the record was lost\" from \"the action never ran\", because the ack is deferred until the whole batch is handled while the effect may already have landed. The consumer gives at-least-once delivery with no duplicate wake — not exactly-once effects. Recovery is therefore establish the fact before replaying: read the real state (`pr view` for the merge, the reply receipt, the file itself) and decide from that evidence, not from the ledger. If the effect cannot be established from evidence it goes to the human instead of being re-executed blind; a replay under the same delivery ID is safe only when the effect is verifiable and the action is idempotent. WHY cites the write-before-action ordering rule or that the consumer is at-least-once and not exactly-once.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "States that a `processing` entry proves an attempt, not completion, and cannot distinguish a lost record from an action that never ran",
+          "name": "processing_is_ambiguous"
+        },
+        {
+          "text": "Takes the real state as the evidence (`pr view` / the reply receipt / the file itself) before replaying the action",
+          "name": "establish_fact_first"
+        },
+        {
+          "text": "Sends an effect that cannot be established from evidence to the human instead of re-executing it blind",
+          "name": "unverifiable_goes_to_human"
+        },
+        {
+          "text": "WHY cites the write-before-action ordering or that the consumer is at-least-once and not exactly-once",
+          "name": "why_cites_rule"
+        }
+      ]
     }
   ]
 }

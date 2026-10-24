@@ -786,6 +786,31 @@
           "name": "why_cites_rule"
         }
       ]
+    },
+    {
+      "id": 29,
+      "name": "interrupted-action-needs-evidence",
+      "prompt": "你在跑 orchestra-auto。一个批次已落盘并唤醒过你，台账里消息 `m-8842` 停在 `processing`：一条 `worker_done`，它要求的动作是合并该票的 PR。进程在 turn 中途死掉了。重启后该批在服务端仍未 ack，其 delivery 文件仍在盘上。\n\n只输出：\n1. STATE：从这条台账记录你能得出什么、不能得出什么\n2. RECOVERY：在重放该动作之前你做什么\n3. IF_UNVERIFIABLE：当效果无法从证据确立时你做什么\n4. WHY：一到两句\n不要执行命令。",
+      "expected_output": "台账这条记录只证明动作被尝试过，不证明它完成、也不证明它失败：一条停在 `processing` 的记录分不清「动作已生效、记录丢了」和「动作根本没跑」——因为 ack 要等整批处理完才发，而效果可能已经落地。收件器给的是 at-least-once 投递加不重复唤醒，不是 exactly-once 效果。所以恢复的办法是先确立事实再决定是否重放：读真实状态（合并查 `pr view`、回复查回执、文件就读文件本身），据证据判断而不是据台账判断。效果无法从证据确立时交给人类，不要盲目重跑；只有效果可验证且动作幂等时，用同一个 delivery ID 重放才安全。WHY 要引用「台账写在动作之前」这条顺序规则，或说明收件器是 at-least-once 而非 exactly-once。",
+      "files": [],
+      "assertions": [
+        {
+          "text": "States that a `processing` entry proves an attempt, not completion, and cannot distinguish a lost record from an action that never ran",
+          "name": "processing_is_ambiguous"
+        },
+        {
+          "text": "Takes the real state as the evidence (`pr view` / the reply receipt / the file itself) before replaying the action",
+          "name": "establish_fact_first"
+        },
+        {
+          "text": "Sends an effect that cannot be established from evidence to the human instead of re-executing it blind",
+          "name": "unverifiable_goes_to_human"
+        },
+        {
+          "text": "WHY cites the write-before-action ordering or that the consumer is at-least-once and not exactly-once",
+          "name": "why_cites_rule"
+        }
+      ]
     }
   ]
 }
