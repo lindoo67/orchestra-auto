@@ -1,5 +1,7 @@
 # orchestra-auto
 
+**[English](README.md) · [简体中文](README.zh-CN.md)**
+
 [![skills.sh](https://img.shields.io/badge/skills.sh-listed-4B32C3)](https://skills.sh/whutlichao/orchestra-auto) [![tests](https://img.shields.io/badge/tests-90%20passing%2C%201%20skipped-brightgreen)](#验证) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 这是一份 Orca 最佳实践，整个做法围绕 [Matt Pocock 的工程 skill](https://github.com/mattpocock/skills)。链用他的。监督、隔离、门禁和合并用 [Orca](https://www.onorca.dev/)。

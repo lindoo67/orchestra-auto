@@ -1,5 +1,7 @@
 # orchestra-auto
 
+**[English](README.md) · [简体中文](README.zh-CN.md)**
+
 [![skills.sh](https://img.shields.io/badge/skills.sh-listed-4B32C3)](https://skills.sh/whutlichao/orchestra-auto) [![tests](https://img.shields.io/badge/tests-90%20passing%2C%201%20skipped-brightgreen)](#verification) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
 An Orca best practice built around [Matt Pocock's engineering skills](https://github.com/mattpocock/skills). The chain is his. Supervision, isolation, gates and merging are [Orca](https://www.onorca.dev/)'s.
