@@ -305,6 +305,14 @@ review 安排、打回判断、决策分类、升级、合并例外，以及「�
   材料不涉及登录账号、不接触社区、不代为发帖。
 - 本仓库只放已发布的包、它们的检查与文档，不含 Orca 本身。
 
+## 待议的问题
+
+流程里最没把握的一处，写在这儿是为了能被反驳，而不是每次重新吵一遍：
+**[验收的四级——它们在哪会出错？](https://github.com/whutlichao/orchestra-auto/issues/20)**
+（implemented / integrated / merged / tracker-closed）。我预计会错的情况有四种：一张票跨两个 PR、
+tracker 靠 merge 关键字自动关票、刻意永不合并的探索性工作、以及合并后又 revert。具体场景比观点有用——
+改动最终落在评测场景里。
+
 ## 致谢
 
 规划链用的是 [Matt Pocock 公开的工程 skill](https://github.com/mattpocock/skills)。本仓库写的是这些 skill 在 Orca（`orca orchestration`）上的监督式跑法，由本仓库实现。Matt Pocock 没有参与开发或维护，也没有背书。个人资料见 [github.com/mattpocock](https://github.com/mattpocock)。

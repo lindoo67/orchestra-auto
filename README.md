@@ -336,6 +336,15 @@ without leaking exactly the data this repository is careful to keep out, so the 
 - This repository holds the published packages, their checks and their documentation. It does not
   contain Orca itself.
 
+## Open question
+
+Where the procedure is least settled, written down so it can be argued with rather than
+re-litigated each time: **[the four acceptance levels — where do they break?](https://github.com/whutlichao/orchestra-auto/issues/20)**
+(implemented / integrated / merged / tracker-closed). The cases I expect to be wrong are a ticket
+spanning two PRs, a tracker that closes itself from a merge keyword, work that is deliberately never
+merged, and a revert after merge. A concrete scenario is worth more than an opinion — that is where a
+fix actually lands.
+
 ## Acknowledgments
 
 The planning chain is [Matt Pocock's public engineering skills](https://github.com/mattpocock/skills). This repository is the supervised way to run those skills on Orca (`orca orchestration`), and it is this repository's own work. Matt Pocock has not participated in its development or maintenance and does not endorse it. See [Matt Pocock's GitHub profile](https://github.com/mattpocock).
