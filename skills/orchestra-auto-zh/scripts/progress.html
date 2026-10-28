@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Orchestra progress</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        background: #101827;
+        color: #e8edf5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0 auto;
+        max-width: 1250px;
+        padding: 24px;
+      }
+      h1 {
+        margin-bottom: 8px;
+      }
+      h3,
+      p {
+        overflow-wrap: anywhere;
+      }
+      h2 {
+        font-size: 1.2rem;
+      }
+      p {
+        line-height: 1.5;
+      }
+      .muted {
+        color: #b8c7da;
+      }
+      #mode {
+        display: inline-block;
+        background: #33466d;
+        border: 2px solid #9cc1ff;
+        padding: 6px 14px;
+        border-radius: 7px;
+        font-weight: bold;
+      }
+      #health {
+        padding: 14px;
+        background: #263751;
+        border-radius: 8px;
+        overflow-wrap: anywhere;
+      }
+      .error {
+        background: #643532 !important;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+        gap: 16px;
+      }
+      .card,
+      section {
+        background: #19263b;
+        border: 1px solid #34445c;
+        border-radius: 10px;
+        padding: 16px;
+        margin: 14px 0;
+      }
+      .card {
+        margin: 10px 0;
+        background: #152034;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: minmax(105px, 1fr) 2fr;
+        gap: 6px;
+      }
+      dt {
+        color: #b8c7da;
+      }
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      a {
+        color: #a9d5ff;
+      }
+      ul {
+        padding-left: 22px;
+      }
+      li {
+        margin: 8px 0;
+        overflow-wrap: anywhere;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      button {
+        padding: 8px;
+        background: #33466d;
+        color: inherit;
+        border: 1px solid #8badde;
+        border-radius: 6px;
+      }
+      small {
+        color: #b8c7da;
+      }
+      @media (max-width: 500px) {
+        body {
+          padding: 12px;
+        }
+        dl {
+          display: block;
+        }
+        dt {
+          margin-top: 8px;
+        }
+        section {
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span id="mode">UNKNOWN</span>
+      <h1>Orchestra progress</h1>
+      <p class="muted">
+        Optional read-only record · explicit coordinator observations · no inbox
+        access
+      </p>
+    </header>
+    <p id="health" role="status">Loading snapshot…</p>
+    <button id="refresh">Refresh now</button>
+    <main id="content"><p>No snapshot loaded.</p></main>
+    <script>
+      "use strict";
+      const content = document.getElementById("content"),
+        health = document.getElementById("health");
+      let last = null;
+      function node(tag, text, parent) {
+        const el = document.createElement(tag);
+        if (text !== undefined) el.textContent = String(text);
+        if (parent) parent.append(el);
+        return el;
+      }
+      function deliveryValue(v) {
+        return v === null || v === undefined
+          ? "unverified"
+          : v
+            ? "verified yes"
+            : "verified no";
+      }
+      function value(v) {
+        return v === null || v === undefined || v === ""
+          ? "unknown"
+          : Array.isArray(v)
+            ? v.join(", ")
+            : String(v);
+      }
+      function facts(parent, obj) {
+        const dl = node("dl", undefined, parent);
+        for (const [k, v] of Object.entries(obj)) {
+          node("dt", k.replaceAll("_", " "), dl);
+          node("dd", value(v), dl);
+        }
+      }
+      function reference(parent, ref) {
+        let url;
+        try {
+          url = new URL(ref);
+        } catch {}
+        if (
+          url &&
+          ["http:", "https:"].includes(url.protocol) &&
+          !url.username &&
+          !url.password
+        ) {
+          const a = node("a", ref, parent);
+          a.href = url.href;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        } else node("code", ref, parent);
+      }
+      function section(title, parent) {
+        const s = node("section", undefined, parent);
+        node("h2", title, s);
+        return s;
+      }
+      function empty(parent) {
+        node("p", "None recorded.", parent);
+      }
+      function render(s) {
+        const next = document.createDocumentFragment();
+        const overview = section("Run overview", next);
+        facts(overview, {
+          run: s.run.id,
+          title: s.run.title,
+          target_repository: s.run.target_repo,
+          phase: s.run.phase,
+          status: s.run.status,
+          started_at: s.run.started_at,
+          updated_at: s.run.updated_at,
+          last_observed: s.run.last_observed,
+          last_effective_progress: s.run.last_effective_progress,
+          freshness: s.run.freshness,
+          ended_at: s.run.ended_at,
+        });
+        node(
+          "p",
+          "Observations are explicit records, not live Orca telemetry. Unknown, lost and stale workers require coordinator investigation. Activity is not verified progress; no completion percentage is estimated.",
+          overview,
+        );
+        const decisions = section("Pending user decisions", next);
+        let pending = false;
+        for (const t of Object.values(s.tasks)) {
+          if (t.pending_decision) {
+            pending = true;
+            node("p", t.id + ": " + t.pending_decision, decisions);
+          }
+        }
+        if (!pending) empty(decisions);
+        const tasks = section("Tasks · dependencies and blockers", next);
+        if (!Object.keys(s.tasks).length) empty(tasks);
+        for (const t of Object.values(s.tasks)) {
+          const card = node("article", undefined, tasks);
+          card.className = "card";
+          node("h3", t.title, card);
+          facts(card, {
+            id: t.id,
+            status: t.status,
+            dependencies: t.dependencies.length ? t.dependencies : "none",
+            blocked_reason: t.blocked_reason,
+            verified_at: t.verified_at,
+          });
+          for (const dep of t.dependencies) {
+            if (!s.tasks[dep]) node("p", "Unknown dependency: " + dep, card);
+          }
+        }
+        const workers = section(
+          "Workers · coordinator verification / self reports",
+          next,
+        );
+        if (!Object.keys(s.workers).length) empty(workers);
+        for (const w of Object.values(s.workers)) {
+          const card = node("article", undefined, workers);
+          card.className = "card";
+          node("h3", w.id, card);
+          facts(card, {
+            task: w.task_id,
+            dispatch: w.dispatch_id,
+            attempt: w.attempt,
+            parent_worker: w.parent_worker_id || "top-level",
+            worktree: w.worktree,
+            start_confirmation: w.start_confirmation,
+            verified_lifecycle: w.lifecycle,
+            reported_lifecycle: w.reported_lifecycle,
+            reported_summary: w.reported_summary,
+            verified_at: w.verified_at,
+            reported_at: w.reported_at,
+            last_observed: w.last_observed,
+            last_effective_progress: w.last_effective_progress,
+            freshness: w.freshness,
+          });
+        }
+        const deliveries = section(
+          "Delivery · four independent verified facts",
+          next,
+        );
+        node(
+          "p",
+          "Worker done ≠ accepted · PR opened ≠ merged · merged ≠ tracker closed",
+          deliveries,
+        );
+        if (!Object.keys(s.deliveries).length) empty(deliveries);
+        for (const d of Object.values(s.deliveries)) {
+          const card = node("article", undefined, deliveries);
+          card.className = "card";
+          facts(card, {
+            task: d.task_id,
+            implemented: deliveryValue(d.implemented),
+            integrated: deliveryValue(d.integrated),
+            merged: deliveryValue(d.merged),
+            tracker_closed: deliveryValue(d.tracker_closed),
+            verified_at: d.verified_at,
+          });
+          for (const ref of d.evidence || [])
+            reference(node("p", undefined, card), ref);
+        }
+        const artifacts = section(
+          "Artifacts · reports, tests, commits and PRs",
+          next,
+        );
+        if (!Object.keys(s.artifacts).length) empty(artifacts);
+        for (const a of Object.values(s.artifacts)) {
+          const p = node("p", a.kind + " · " + a.label + " · ", artifacts);
+          reference(p, a.reference);
+        }
+        const timeline = section("Timeline", next);
+        if (!s.events.length) empty(timeline);
+        const list = node("ul", undefined, timeline);
+        for (const e of [...s.events].reverse()) {
+          const li = node(
+            "li",
+            e.at +
+              " · " +
+              e.source +
+              " · " +
+              e.type +
+              " · " +
+              value(e.task_id || e.worker_id || e.entity_id) +
+              " · " +
+              (e.summary || ""),
+            list,
+          );
+          for (const ref of e.evidence || [])
+            reference(node("p", undefined, li), ref);
+        }
+        content.replaceChildren(next);
+        document.getElementById("mode").textContent = s.run.mode;
+      }
+      async function refresh() {
+        try {
+          const response = await fetch("/snapshot", { cache: "no-store" });
+          const data = await response.json();
+          if (!response.ok)
+            throw Error(data.error || "Snapshot request failed");
+          render(data);
+          last = new Date();
+          health.className = "";
+          health.textContent =
+            "Snapshot loaded " +
+            last.toLocaleTimeString() +
+            " · refresh every 3 seconds · " +
+            data.run.freshness;
+        } catch (error) {
+          health.className = "error";
+          health.textContent =
+            "Observation error: " +
+            error.message +
+            (last
+              ? " · showing last valid snapshot from " +
+                last.toLocaleTimeString()
+              : " · no valid snapshot available");
+        }
+      }
+      document.getElementById("refresh").addEventListener("click", refresh);
+      refresh();
+      setInterval(refresh, 3000);
+    </script>
+  </body>
+</html>
