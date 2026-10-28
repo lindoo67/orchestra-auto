@@ -3,7 +3,7 @@
 **何时读取**：用户需要观察 Run、task、worker 的进展、本地看板或可复现离线演示时。
 按需加载，不是派发前置条件。
 
-目录：[使用](#使用)、[协议 v1](#协议-v1)、[流程写入责任](#流程写入责任)、[恢复与边界](#恢复与边界)。
+目录：[使用](#使用)、[可视化看板](#阅读可视化看板)、[协议 v1](#协议-v1)、[流程写入责任](#流程写入责任)、[恢复与边界](#恢复与边界)。
 
 ## 使用
 
@@ -43,6 +43,45 @@ python3 "$PROGRESS" --state "$AUDIT_ROOT/demo-example" serve --port 8766
 不能覆盖真实 Run，不调用 Orca，不需要凭证。包含正常工作、依赖阻塞、等用户、验收打回、
 嵌套 worker、失联 worker、独立交付事实；用 `serve --stale-seconds 0` 展示过期。
 不得将演示引用当作真实已执行测试。
+
+## 阅读可视化看板
+
+两个安装包提供 byte-identical 的同一页面，默认中文，可切换 English。浅色主画布、窄导航将 Run
+目标、观测健康、决策、数量、图表与证据分层；不加载远程字体、资源或前端包。每三秒读取一次，
+筛选、展开明细、依赖图滚动位置及语言在刷新后保留；错误带时间，保留完整的最后有效页面。
+
+环图只表示**实际记录的任务数量分布**，包含未知状态，中心为实际总数。文字图例可筛选任务，
+筛选状态及重置明确可见。空快照显示零，不虚构扇区。不估算完成百分比或剩余时间。四项交付卡片
+分别统计严格 `true`、严格 `false`、null/缺失（未核验）；没有 delivery 不代表成功。
+
+流程箭头是**静态参考路径**，不是调度器、实时遥测或前序通过证明。蓝色仅代表本项有匹配记录，
+每一步可展开统计依据：
+
+| 参考步骤 | snapshot 的准确推导 |
+| --- | --- |
+| 计划 | `tasks` 记录数；仅表示任务已记录，不代表计划已审批 |
+| 派活 / 启动 | `start_confirmation == "observed"` 的 worker 数；dispatched 不等于已观察启动 |
+| 实施 | `status == "running"` 的任务数，不是实施验收数 |
+| 完成报告 | `reported_lifecycle == "reported_done"` 的 worker 数；仅自报，不是已验收 |
+| 验收 | `status == "accepted"` 的任务数 |
+| 集成 | `integrated === true` 的 delivery 数 |
+| 合并 | `merged === true` 的 delivery 数，PR 产物不自动设置 |
+| tracker 对账 | `tracker_closed === true` 的 delivery 数，合并不自动设置 |
+| 等待支路 | `status == "waiting_user"` 或 `pending_decision` 非空的任务数，同一任务只计一次 |
+| 返工支路 | `status == "rejected"` 的任务数 |
+
+零表示没有匹配记录，不是核验 false，也不是证明动作从未发生。当前阶段直接读 `run.phase`，不据此
+点亮前序步骤。交付 false/null 与流程零计数分开；worker 自报不更新已核验生命周期或任务状态。
+
+原生 SVG 依赖图从原 `dependencies` 数组绘制「依赖 → 任务」，保留未知节点、循环与长标题；完整文本
+可通过 SVG 可访问标题及可展开依赖文本读取。图内滚动有边界，不计算调度顺序。Worker 父子缩进，
+核验、自报、启动确认及时效分列；完整 ID、worktree 和摘要放入明细。仅无凭证 HTTP(S) 引用可点击，
+其他内容为文本，不提供文件内容。
+
+可选浏览器回归使用仓库外的 Playwright 与 Chromium，不是运行依赖。设置 `PLAYWRIGHT_MODULE` 指向
+该外部包，然后针对独立 DEMO 服务执行
+`node tests/progress_dashboard_browser.cjs http://127.0.0.1:8766/ EVIDENCE_DIR`，覆盖四种视口、
+事实边界、刷新状态保留与安全渲染。
 
 ## 协议 v1
 

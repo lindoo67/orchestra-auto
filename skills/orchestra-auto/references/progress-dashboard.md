@@ -3,7 +3,7 @@
 **When to read**: when the user wants observable Run/task/worker progress, a local dashboard,
 or a reproducible offline demonstration. Load this only on demand; it is not a dispatch prerequisite.
 
-Contents: [Operation](#operation), [Protocol v1](#protocol-v1),
+Contents: [Operation](#operation), [Visual dashboard](#reading-the-visual-dashboard), [Protocol v1](#protocol-v1),
 [Workflow ownership](#workflow-ownership), [Recovery and boundaries](#recovery-and-boundaries).
 
 ## Operation
@@ -50,6 +50,54 @@ facts. The demo refuses any existing directory and cannot overwrite a real run. 
 calls and needs no credentials. It includes normal work, dependency blocking, waiting for a human,
 review rejection, nested workers, a lost worker and independent delivery facts. Use
 `serve --stale-seconds 0` to demonstrate stale observations. Never present demo references as tests run.
+
+## Reading the visual dashboard
+
+The single bundled page defaults to Chinese and has an English switch. Both bundles ship the
+same page bytes. The light canvas and narrow navigation separate the Run objective, observation
+health, decisions, counts, charts and evidence. No external fonts, assets or frontend packages load.
+A snapshot refreshes every three seconds. Task filters, expanded details, graph scroll and language
+survive updates; errors show their time and preserve the complete last valid page.
+
+The donut partitions **actual recorded task counts**, including unknown states; its center is the
+actual task total. Each textual legend button filters the task list, with a visible filter and reset.
+An empty snapshot shows zero with no invented slice. Neither chart estimates completion percentage
+or remaining time. Four delivery cards independently count strict `true`, strict `false` and
+null/missing (unverified) values; missing delivery records never mean success.
+
+The workflow arrows are a **static reference path**, not scheduling, execution telemetry, or a
+claim that previous steps passed. Blue indicates matching observations at that step only. Each step
+has an expandable count basis:
+
+| Reference step | Exact snapshot basis |
+| --- | --- |
+| Plan | Number of recorded `tasks`; this means tasks are recorded, not a verified plan approval |
+| Dispatch / start | Workers with `start_confirmation == "observed"`; dispatched alone is not observed start |
+| Implement | Tasks with `status == "running"`; not an implementation acceptance count |
+| Report done | Workers with `reported_lifecycle == "reported_done"`; explicitly self-reported, not verified acceptance |
+| Accept | Tasks with `status == "accepted"` |
+| Integrate | Deliveries with `integrated === true` |
+| Merge | Deliveries with `merged === true`; a PR artifact sets none |
+| Tracker reconciliation | Deliveries with `tracker_closed === true`; merge sets none |
+| Wait branch | Tasks whose status is `waiting_user` or have a nonempty `pending_decision`, counted once |
+| Rework branch | Tasks with `status == "rejected"` |
+
+Zero means no matching record, not verified false or proof the action never happened. The current
+phase reads `run.phase` directly and never lights predecessor steps. Delivery false/null remain
+separate from zero workflow counts. Worker self reports never update verified lifecycle or task state.
+
+The scrollable native SVG dependency view draws prerequisite → task edges from the original
+`dependencies` arrays. It retains unknown nodes, cycles and long titles (full text in accessible
+SVG titles and expandable dependency text). This is a readable bounded layout, not a computed
+execution order. Worker rows preserve parent/child indentation; verified lifecycle, self report,
+start confirmation and freshness are separate. Full identities/worktrees and summaries are tucked
+into expandable details. HTTP(S) references without credentials are links; all other values remain
+text, and no file contents are served.
+
+Optional browser regression checks require an externally installed Playwright and Chromium, not
+runtime dependencies. Set `PLAYWRIGHT_MODULE` to that external package, then run
+`node tests/progress_dashboard_browser.cjs http://127.0.0.1:8766/ EVIDENCE_DIR` against an isolated
+DEMO server. It covers four viewports, semantic edge cases, refresh state and safe rendering.
 
 ## Protocol v1
 
