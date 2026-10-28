@@ -156,7 +156,8 @@ the last valid snapshot with a visible error and its load time; it never substit
 
 The snapshot is fsynced, replaced atomically, and its directory fsynced. A crash before replace leaves
 the old valid snapshot and perhaps an ignored `.progress-*` temporary file; a crash after replace
-leaves the new snapshot, whose stable event ID makes retries safe. Locks release on process exit.
+leaves the new snapshot, whose stable event ID makes retries safe. Lock acquisition times out after two seconds with a warning, so a contended recorder cannot
+indefinitely hold the coordinator turn. Retry later with the same event ID. Locks release on process exit.
 Do not delete an active lock file or run an automatic repair. A corrupt/unsupported snapshot fails
 closed without overwrite: preserve it, restore a known-good audit backup into a separate external
 directory and reconcile subsequent facts explicitly. No migration, truncation or guessed reconstruction.

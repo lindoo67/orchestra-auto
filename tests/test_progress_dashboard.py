@@ -1,4 +1,6 @@
 """Public CLI, snapshot and HTTP contracts for the optional progress sidecar."""
+import fcntl
+import time
 import concurrent.futures
 import json
 import os
@@ -193,6 +195,19 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(traces['working'], traces['failing'])
         self.assertEqual(traces['working'], traces['viewer-down'])
 
+    def test_top_level_parent_identity_cannot_change_or_form_a_cycle(self):
+        self.init()
+        self.task()
+        self.worker()
+        self.cli('worker', {'id': 'child', 'task_id': 't1', 'dispatch_id': 'child-d', 'attempt': 1,
+                            'parent_worker_id': 'w1'}, event='child')
+        before = (self.state / 'progress.json').read_bytes()
+        self.cli('worker', {'id': 'w1', 'parent_worker_id': 'child'}, event='cycle', ok=False)
+        self.assertEqual((self.state / 'progress.json').read_bytes(), before)
+        self.assertIsNone(self.snapshot()['workers']['w1']['parent_worker_id'])
+        self.cli('worker', {'id': 'missing-parent', 'task_id': 't1', 'dispatch_id': 'missing-d',
+                            'attempt': 1, 'parent_worker_id': 'absent'}, event='missing', ok=False)
+
     def test_duplicate_events_are_idempotent_and_payload_collisions_fail(self):
         self.init()
         data = {'type': 'observed', 'summary': 'No state transition'}
@@ -202,6 +217,22 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual((self.state / 'progress.json').read_bytes(), before)
         self.cli('event', {**data, 'summary': 'Different'}, event='repeat', ok=False)
         self.assertEqual((self.state / 'progress.json').read_bytes(), before)
+
+    def test_contended_lock_times_out_and_wrapper_can_continue_without_mutation(self):
+        self.init()
+        before = (self.state / 'progress.json').read_bytes()
+        with (self.state / '.progress.lock').open('a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            started = time.monotonic()
+            result = subprocess.run([sys.executable, str(SCRIPT), '--state', str(self.state),
+                                     'run', '--event-id', 'locked', '--data', '{"phase":"blocked"}'],
+                                    capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('lock busy', result.stderr)
+            self.assertLess(time.monotonic() - started, 4)
+        self.assertEqual((self.state / 'progress.json').read_bytes(), before)
+        self.cli('run', {'phase': 'recovered'}, event='unlocked')
+        self.assertEqual(self.snapshot()['run']['phase'], 'recovered')
 
     def test_process_concurrency_and_abandoned_temporary_file_recovery(self):
         self.init()

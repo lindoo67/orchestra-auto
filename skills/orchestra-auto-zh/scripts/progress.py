@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+import time
 from urllib.parse import urlsplit
 
 VERSION = 1
@@ -112,7 +113,15 @@ def locked(directory):
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(directory / '.progress.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        deadline = time.monotonic() + 2
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise ValueError('progress lock busy; retry later with the same event-id')
+                time.sleep(0.025)
         yield
 
 
@@ -207,7 +216,8 @@ def mutate(directory, command, data, event_id, source, effective=False):
                     raise ValueError('coordinator must register worker against an existing task')
                 state['workers'][data['id']] = {
                     'id': data['id'], 'lifecycle': 'unknown', 'reported_lifecycle': 'unknown',
-                    'start_confirmation': 'unknown', 'last_effective_progress': None}
+                    'start_confirmation': 'unknown', 'last_effective_progress': None,
+                    'parent_worker_id': data.get('parent_worker_id')}
             worker = state['workers'][data['id']]
             if source == 'worker':
                 required(data, 'task_id', 'dispatch_id', 'attempt')
