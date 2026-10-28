@@ -21,8 +21,12 @@ class ProgressTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.state = Path(self.temp.name) / 'audit' / 'real'
-        self.repo = Path(self.temp.name) / 'repo'
+        # macOS TMPDIR lives under /var, a symlink to /private/var; progress.py
+        # rejects any state path with a symlink component, so fixtures must use
+        # the resolved root. The symlink-boundary test below creates its own link.
+        self.root = Path(self.temp.name).resolve()
+        self.state = self.root / 'audit' / 'real'
+        self.repo = self.root / 'repo'
         self.repo.mkdir()
         (self.repo / '.git').mkdir()
 
@@ -144,9 +148,9 @@ class ProgressTests(unittest.TestCase):
     def test_stub_workflow_trace_is_identical_disabled_working_failing_and_viewer_down(self):
         # This fixture CLI represents normal coordinator actions, not a new Orca API.
         # A separate forbidden-orca executable catches any unexpected real CLI call.
-        stub = Path(self.temp.name) / 'action.py'
+        stub = self.root / 'action.py'
         stub.write_text("import sys\nwith open(sys.argv[1], 'a') as f: f.write(sys.argv[2] + '\\n')\n")
-        forbidden = Path(self.temp.name) / 'orca'
+        forbidden = self.root / 'orca'
         forbidden.write_text('#!/bin/sh\nprintf unexpected-orca >> "$ORCA_TRACE"\nexit 91\n')
         forbidden.chmod(0o700)
         wrapper = re.search(r'progress_record\(\) \{.*?\n\}',
@@ -156,9 +160,9 @@ class ProgressTests(unittest.TestCase):
                    'reject', 'retry', 'accept', 'integrate', 'merge', 'tracker-close', 'end']
         traces = {}
         for mode in ('disabled', 'working', 'failing', 'viewer-down'):
-            state = Path(self.temp.name) / mode
-            trace = Path(self.temp.name) / (mode + '.trace')
-            unexpected = Path(self.temp.name) / (mode + '.orca')
+            state = self.root / mode
+            trace = self.root / (mode + '.trace')
+            unexpected = self.root / (mode + '.orca')
             if mode == 'viewer-down':
                 address, viewer = self.serve(state, with_process=True)
                 # Starting and stopping the viewer does not create the state or own the recorder.
@@ -180,7 +184,7 @@ class ProgressTests(unittest.TestCase):
                                          'PYTHON': sys.executable, 'STUB': str(stub), 'TRACE': str(trace),
                                          'INIT': json.dumps({'id': mode, 'target_repo': str(self.repo),
                                                              'mode': 'REAL'}),
-                                         'PATH': self.temp.name + os.pathsep + os.environ['PATH'],
+                                         'PATH': str(self.root) + os.pathsep + os.environ['PATH'],
                                          'ORCA_TRACE': str(unexpected)})
             self.assertEqual(result.returncode, 0, result.stderr)
             traces[mode] = trace.read_text().splitlines()
@@ -261,7 +265,7 @@ class ProgressTests(unittest.TestCase):
             self.cli('init', {'id': 'bad', 'target_repo': str(self.repo), 'mode': 'REAL'}, ok=False)
             self.assertFalse((path / 'progress.json').exists())
         self.state = original
-        link = Path(self.temp.name) / 'link'
+        link = self.root / 'link'
         link.symlink_to(self.repo, target_is_directory=True)
         self.state = link / 'audit'
         self.cli('init', {'id': 'bad', 'target_repo': str(self.repo), 'mode': 'REAL'}, ok=False)
@@ -323,7 +327,7 @@ class ProgressTests(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual((self.state / 'progress.json').read_bytes(), before)
-        self.state = Path(self.temp.name) / 'demo'
+        self.state = self.root / 'demo'
         result = subprocess.run([sys.executable, str(demo), '--state', str(self.state),
                                  '--target-repo', str(self.repo)], capture_output=True, text=True,
                                 env={**os.environ, 'PATH': '/nonexistent'})
